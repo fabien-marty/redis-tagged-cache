@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "rtc"
+version = "0.1.0"
+description = ""
+authors = ["Fabien MARTY <fabien.marty@botify.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.7"
+redis = "4.6.0"
+
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.7.4"
+mypy = "1.4.1"
+pytest = "7.4.4"
+import-linter = "1.6.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
