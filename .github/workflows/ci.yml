@@ -34,12 +34,12 @@ jobs:
         if: matrix.python-version == '3.7' || matrix.python-version == '3.8'
         run: |
           python3 -m venv $POETRY_HOME
-          $POETRY_HOME/bin/pip install poetry==1.5.1
+          $POETRY_HOME/bin/pip install "poetry>=1.5.1,<1.6"
       - name: Install poetry (Python >=3.9)
         if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
         run: |
           python3 -m venv $POETRY_HOME
-          $POETRY_HOME/bin/pip install poetry==1.8.4
+          $POETRY_HOME/bin/pip install "poetry>=1.8.4,<1.9"
       - name: Fix github path
         run: |
           echo "$POETRY_HOME/bin" >> "$GITHUB_PATH"
@@ -68,3 +68,34 @@ jobs:
       - name: Checking for dirty files (again)
         run: |
           make no-dirty
+
+  publish_pypi:
+    runs-on: ubuntu-22.04
+    needs: lint_and_test
+    if: github.event_name == 'release'
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install poetry
+        run: |
+          python3 -m venv $POETRY_HOME
+          $POETRY_HOME/bin/pip install "poetry>=1.8.4,<1.9"
+      - name: Fix github path
+        run: |
+          echo "$POETRY_HOME/bin" >> "$GITHUB_PATH"
+      - name: Install requirements
+        run: |
+          poetry install
+      - name: Publish on Pypi
+        run: |
+          VERSION=`echo "${{ github.event.release.tag_name }}" |sed 's/^v//g'`
+          cat pyproject.toml |sed 's/^version = ".*"$/version = "'${VERSION}'"/g' > pyproject.toml.new
+          mv -f pyproject.toml.new pyproject.toml
+          cat pyproject.toml |grep ^version
+          poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
+          poetry build
+          poetry publish
