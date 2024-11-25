@@ -19,6 +19,12 @@ def test_basic(service: Service):
     assert service.get_value("key", ["tag1", "tag2"]) is None
 
 
+def test_tags_order(service: Service):
+    service.set_value("key", b"value", ["tag1", "tag2"])
+    assert service.get_value("key", ["tag1", "tag2"]) == b"value"
+    assert service.get_value("key", ["tag2", "tag1"]) == b"value"
+
+
 def test_invalidate_tags(service: Service):
     service.set_value("key", b"value", ["tag1", "tag2"])
     assert service.get_value("key", ["tag1", "tag2"]) == b"value"

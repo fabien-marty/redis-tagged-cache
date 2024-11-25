@@ -90,7 +90,7 @@ class Service:
         special_tag_names = tag_names[:]
         if SPECIAL_ALL_TAG_NAME not in tag_names:
             special_tag_names.append(SPECIAL_ALL_TAG_NAME)
-        tags_values = self.get_tag_values(special_tag_names)
+        tags_values = self.get_tag_values(sorted(special_tag_names))
         tags_hash = short_hash(b"".join(tags_values))
         value_key_hash = short_hash(value_key)
         return f"rtc:{self.namespace_hash}:v:{value_key_hash}:{tags_hash}"
