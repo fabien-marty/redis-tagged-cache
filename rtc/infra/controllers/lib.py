@@ -114,9 +114,9 @@ class RedisTaggedCache:
                 if ignore_first_argument and len(args) > 0:
                     args_index = 1
                 try:
-                    serialized_args = json.dumps([args[args_index:], kwargs]).encode(
-                        "utf-8"
-                    )
+                    serialized_args = json.dumps(
+                        [args[args_index:], kwargs], sort_keys=True
+                    ).encode("utf-8")
                     key = short_hash(serialized_args)
                 except Exception:
                     logging.warning(
