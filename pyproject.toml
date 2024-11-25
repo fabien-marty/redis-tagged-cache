@@ -7,14 +7,13 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.7"
-redis = "4.6.0"
-
+redis = ">=4.6.0"
 
 [tool.poetry.group.dev.dependencies]
-ruff = "^0.7.4"
-mypy = "1.4.1"
-pytest = "7.4.4"
-import-linter = "1.6.0"
+ruff = { version = "^0.8", python = ">=3.9" }
+mypy = { version = "^1.13", python = ">=3.9" }
+pytest = { version = "^8.3", python = ">=3.9" }
+import-linter = { version = "^2.1", python = ">=3.9" }
 
 [build-system]
 requires = ["poetry-core"]

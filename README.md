@@ -72,3 +72,11 @@ The invalidation system does not really remove keys from redis. Invalidated entr
 
 **Be sure to configure your redis instance as a cache with capped memory and FIXME setting about LRU**
 
+## Dev
+
+As we support Python 3.7+ for the runtime, the dev environment requires Python 3.9+.
+
+- `make lint`: for linting the code
+- `make test`: for executing test
+
+(the poetry env will be automatically created)
