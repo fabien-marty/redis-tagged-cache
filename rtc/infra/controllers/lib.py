@@ -1,10 +1,7 @@
-import json
-import logging
-import pickle
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Union
+from typing import List, Optional, Union
 
-from rtc.app.service import Service, short_hash
+from rtc.app.service import Service
 from rtc.app.storage import StoragePort
 from rtc.infra.adapters.storage.blackhole import BlackHoleStorageAdapter
 from rtc.infra.adapters.storage.redis import RedisStorageAdapter
@@ -101,60 +98,16 @@ class RedisTaggedCache:
         """Invalidate all entries."""
         self._service.invalidate_all()
 
-    def _decorator(
-        self,
-        tags: List[str],
-        ignore_first_argument: bool = False,
-        lifetime: Optional[int] = None,
-    ):
-        def inner_decorator(f: Any):
-            def wrapped(*args: Any, **kwargs: Any):
-                key: str = ""
-                args_index: int = 0
-                if ignore_first_argument and len(args) > 0:
-                    args_index = 1
-                try:
-                    serialized_args = json.dumps(
-                        [args[args_index:], kwargs], sort_keys=True
-                    ).encode("utf-8")
-                    key = short_hash(serialized_args)
-                except Exception:
-                    logging.warning(
-                        "arguments are not JSON serializable => cache bypassed",
-                        exc_info=True,
-                    )
-                if key:
-                    serialized_res = self.get(key, tags)
-                    if serialized_res is not None:
-                        # cache hit!
-                        return pickle.loads(serialized_res)
-                res = f(*args, **kwargs)
-                if key:
-                    try:
-                        serialized = pickle.dumps(res)
-                    except Exception:
-                        logging.warning(
-                            "the returned value is not pickle serializable => cache bypassed",
-                            exc_info=True,
-                        )
-                    else:
-                        self.set(key, serialized, tags, lifetime=lifetime)
-                return res
-
-            return wrapped
-
-        return inner_decorator
-
     def function_decorator(
         self,
         tags: List[str],
         lifetime: Optional[int] = None,
     ):
-        return self._decorator(tags, lifetime=lifetime)
+        return self._service.function_decorator(tags, lifetime=lifetime)
 
     def method_decorator(
         self,
         tags: List[str],
         lifetime: Optional[int] = None,
     ):
-        return self._decorator(tags, ignore_first_argument=True, lifetime=lifetime)
+        return self._service.method_decorator(tags, lifetime=lifetime)

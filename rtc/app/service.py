@@ -1,19 +1,36 @@
 import base64
 import hashlib
+import json
+import logging
+import pickle
 import uuid
 from dataclasses import dataclass, field
-from typing import List, Optional, Union
+from typing import Any, List, Optional, Union
 
 from rtc.app.storage import StoragePort
 
 SPECIAL_ALL_TAG_NAME = "@@@all@@@"
 
 
-def short_hash(data: Union[str, bytes]) -> str:
-    """Generate a short alpha-numeric hash of the given string or bytes."""
+def _sha256_binary_hash(data: Union[str, bytes]) -> bytes:
+    """Generate a binary hash (bytes) of the given string or bytes."""
     if isinstance(data, str):
         data = data.encode("utf-8")
-    h = hashlib.sha256(data).digest()[0:8]
+    h = hashlib.sha256(data)
+    return h.digest()
+
+
+def _sha256_text_hash(data: Union[str, bytes]) -> str:
+    """Generate a hexa hash (str) of the given string or bytes."""
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    h = hashlib.sha256(data)
+    return h.hexdigest()
+
+
+def short_hash(data: Union[str, bytes]) -> str:
+    """Generate a short alpha-numeric hash of the given string or bytes."""
+    h = _sha256_binary_hash(data)[0:8]
     return (
         base64.b64encode(h)
         .decode("utf-8")
@@ -125,20 +142,78 @@ class Service:
         resolved_lifetime = self.resolve_lifetime(lifetime)
         self.storage_adapter.set(storage_key, value, lifetime=resolved_lifetime)
 
-    def get_value(self, key: str, tags: List[str]) -> Optional[bytes]:
+    def get_value(self, key: str, tag_names: List[str]) -> Optional[bytes]:
         """Read the value for the given key (with given invalidation tags).
 
         If the key does not exist (or invalidated), None is returned.
 
         """
-        storage_key = self.get_storage_value_key(key, tags)
+        storage_key = self.get_storage_value_key(key, tag_names)
         return self.storage_adapter.mget([storage_key])[0]
 
-    def delete_value(self, key: str, tags: List[str]) -> None:
+    def delete_value(self, key: str, tag_names: List[str]) -> None:
         """Delete the entry for the given key (with given invalidation tags).
 
         If the key does not exist (or invalidated), no exception is raised.
 
         """
-        storage_key = self.get_storage_value_key(key, tags)
+        storage_key = self.get_storage_value_key(key, tag_names)
         self.storage_adapter.delete(storage_key)
+
+    def _decorator(
+        self,
+        tag_names: List[str],
+        ignore_first_argument: bool = False,
+        lifetime: Optional[int] = None,
+    ):
+        def inner_decorator(f: Any):
+            def wrapped(*args: Any, **kwargs: Any):
+                key: str = ""
+                args_index: int = 0
+                if ignore_first_argument and len(args) > 0:
+                    args_index = 1
+                try:
+                    serialized_args = json.dumps(
+                        [args[args_index:], kwargs], sort_keys=True
+                    ).encode("utf-8")
+                    key = _sha256_text_hash(serialized_args)
+                except Exception:
+                    logging.warning(
+                        "arguments are not JSON serializable => cache bypassed",
+                        exc_info=True,
+                    )
+                if key:
+                    serialized_res = self.get_value(key, tag_names)
+                    if serialized_res is not None:
+                        # cache hit!
+                        return pickle.loads(serialized_res)
+                res = f(*args, **kwargs)
+                if key:
+                    try:
+                        serialized = pickle.dumps(res)
+                    except Exception:
+                        logging.warning(
+                            "the returned value is not pickle serializable => cache bypassed",
+                            exc_info=True,
+                        )
+                    else:
+                        self.set_value(key, serialized, tag_names, lifetime=lifetime)
+                return res
+
+            return wrapped
+
+        return inner_decorator
+
+    def function_decorator(
+        self,
+        tag_names: List[str],
+        lifetime: Optional[int] = None,
+    ):
+        return self._decorator(tag_names, lifetime=lifetime)
+
+    def method_decorator(
+        self,
+        tag_names: List[str],
+        lifetime: Optional[int] = None,
+    ):
+        return self._decorator(tag_names, ignore_first_argument=True, lifetime=lifetime)

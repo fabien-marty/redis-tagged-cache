@@ -59,3 +59,48 @@ def test_invalidate_all(service: Service):
     assert service.get_value("key", ["tag1", "tag2"]) is None
     assert service.get_value("key", ["tag3"]) is None
     assert service.get_value("key", []) is None
+
+
+def test_function_decorator(service: Service):
+    @service.function_decorator(tag_names=["tag1", "tag2"])
+    def decorated(*args, **kwargs):
+        service.set_value("called", b"called", tag_names=[])
+        return [args, kwargs]
+
+    res = decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+    assert service.get_value("called", tag_names=[]) == b"called"
+    service.delete_value("called", tag_names=[])
+    assert service.get_value("called", tag_names=[]) is None
+
+    res = decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+    assert service.get_value("called", tag_names=[]) is None
+
+    res = decorated(1, 2, foo="bar")
+    assert res == [(1, 2), {"foo": "bar"}]
+    assert service.get_value("called", tag_names=[]) == b"called"
+    service.delete_value("called", tag_names=[])
+    assert service.get_value("called", tag_names=[]) is None
+
+
+def test_method_decorator(service: Service):
+    class A:
+        @service.method_decorator(tag_names=["tag1", "tag2"])
+        def decorated(self, *args, **kwargs):
+            service.set_value("called", b"called", tag_names=[])
+            return [args, kwargs]
+
+    a = A()
+    res = a.decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+    assert service.get_value("called", tag_names=[]) == b"called"
+    service.delete_value("called", tag_names=[])
+    assert service.get_value("called", tag_names=[]) is None
+
+    service.invalidate_tag("tag2")
+    res = a.decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+    assert service.get_value("called", tag_names=[]) == b"called"
+    service.delete_value("called", tag_names=[])
+    assert service.get_value("called", tag_names=[]) is None
