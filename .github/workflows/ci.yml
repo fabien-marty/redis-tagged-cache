@@ -18,6 +18,11 @@ jobs:
       matrix:
         python-version: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
     runs-on: ubuntu-22.04
+    services:
+      redis:
+        image: redis:7.2
+        ports:
+          - 6379:6379
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
@@ -45,7 +50,13 @@ jobs:
         if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
         run: |
           make FIX=0 lint
-      - name: Run Tests
+      - name: run unit tests
+        run: |
+          make test
+      - name: run integration tests
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
         run: |
           make test
       - name: Checking for dirty files

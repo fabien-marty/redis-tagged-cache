@@ -1,38 +1,31 @@
 import os
 import uuid
-from typing import Optional
 
 import pytest
-import redis
 
 from rtc.infra.adapters.storage.dict import DictStorageAdapter
 from rtc.infra.controllers.lib import RedisTaggedCache
 
-DONT_TEST_WITH_REDIS: bool = os.environ.get("RTC_DONT_TEST_WITH_REDIS", "0") == "1"
-__REDIS_AVAILABLE: Optional[bool] = None
+REDIS_HOST = os.getenv("REDIS_HOST", "")
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 
-def is_redis_available() -> bool:
-    global __REDIS_AVAILABLE
-    if DONT_TEST_WITH_REDIS:
-        return False
-    if __REDIS_AVAILABLE is not None:
-        return __REDIS_AVAILABLE
-    r = redis.Redis(socket_connect_timeout=2, socket_timeout=2)
-    try:
-        __REDIS_AVAILABLE = r.ping() is True
-    except Exception:
-        __REDIS_AVAILABLE = False
-    return __REDIS_AVAILABLE
+def _instance(**kwargs) -> RedisTaggedCache:
+    if "namespace" not in kwargs:
+        namespace = str(uuid.uuid4())
+        kwargs = {"namespace": namespace, **kwargs}
+    if REDIS_HOST:
+        kwargs["host"] = REDIS_HOST
+        kwargs["port"] = REDIS_PORT
+    cache = RedisTaggedCache(**kwargs)
+    if not REDIS_HOST and not kwargs.get("disabled", False):
+        cache._forced_adapter = DictStorageAdapter()
+    return cache
 
 
 @pytest.fixture
 def instance() -> RedisTaggedCache:
-    namespace = str(uuid.uuid4())
-    cache = RedisTaggedCache(namespace=namespace)
-    if is_redis_available():
-        cache._forced_adapter = DictStorageAdapter()
-    return cache
+    return _instance()
 
 
 def test_basic(instance: RedisTaggedCache):
@@ -47,13 +40,13 @@ def test_basic(instance: RedisTaggedCache):
 
 
 def test_blackhole():
-    instance = RedisTaggedCache(disabled=True)
-    instance.set("foo", b"value", tags=["tag1", "tag2"])
-    assert instance.get("foo", tags=["tag1", "tag2"]) is None
-    instance.delete("foo", tags=["tag1", "tag2"])
-    assert instance.get("foo", tags=["tag1", "tag2"]) is None
-    instance.invalidate("tag2")
-    assert instance.get("foo", tags=["tag1", "tag2"]) is None
+    inst = _instance(disabled=True)
+    inst.set("foo", b"value", tags=["tag1", "tag2"])
+    assert inst.get("foo", tags=["tag1", "tag2"]) is None
+    inst.delete("foo", tags=["tag1", "tag2"])
+    assert inst.get("foo", tags=["tag1", "tag2"]) is None
+    inst.invalidate("tag2")
+    assert inst.get("foo", tags=["tag1", "tag2"]) is None
 
 
 def test_function_decorator(instance: RedisTaggedCache):
