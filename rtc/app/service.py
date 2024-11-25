@@ -100,7 +100,7 @@ class Service:
         tag_storage_key = self.get_storage_tag_key(tag_name)
         self._invalidate_tag(tag_storage_key)
 
-    def invalidate_tags(self, tag_names: list[str]) -> None:
+    def invalidate_tags(self, tag_names: List[str]) -> None:
         """Invalidate a list of tag names."""
         for tag_name in tag_names:
             self.invalidate_tag(tag_name)

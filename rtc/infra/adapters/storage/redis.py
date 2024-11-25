@@ -33,7 +33,7 @@ class RedisStorageAdapter(StoragePort):
 
     def mget(self, storage_keys: List[str]) -> List[Optional[bytes]]:
         try:
-            return self.redis_client.mget(storage_keys)
+            return self.redis_client.mget(storage_keys)  # type: ignore
         except Exception:
             logging.warning("Failed to mget values in Redis", exc_info=True)
             return [None] * len(storage_keys)

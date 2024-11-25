@@ -14,18 +14,32 @@ env:
 jobs:
 
   lint_and_test:
+    strategy:
+      matrix:
+        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
     runs-on: ubuntu-22.04
+    services:
+      redis:
+        image: redis:7.2
+        ports:
+          - 6379:6379
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
-          python-version: "3.9"
-      - name: Install poetry
+          python-version: ${{ matrix.python-version }}
+      - name: Install poetry (Python 3.7 or 3.8)
+        if: matrix.python-version == '3.7' || matrix.python-version == '3.8'
         run: |
           python3 -m venv $POETRY_HOME
-          $POETRY_HOME/bin/pip install poetry
+          $POETRY_HOME/bin/pip install poetry==1.5.1
+      - name: Install poetry (Python >=3.9)
+        if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
+        run: |
+          python3 -m venv $POETRY_HOME
+          $POETRY_HOME/bin/pip install poetry==1.8.4
       - name: Fix github path
         run: |
           echo "$POETRY_HOME/bin" >> "$GITHUB_PATH"
@@ -33,9 +47,16 @@ jobs:
         run: |
           poetry install
       - name: Run lint
+        if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
         run: |
-          make lint
-      - name: Run Tests
+          make FIX=0 lint
+      - name: run unit tests
+        run: |
+          make test
+      - name: run integration tests
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
         run: |
           make test
       - name: Checking for dirty files
