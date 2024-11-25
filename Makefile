@@ -8,8 +8,6 @@ LINT_IMPORTS=$(POETRY_RUN) lint-imports
 MYPY=$(POETRY_RUN) mypy
 PYTEST=$(POETRY_RUN) pytest
 PYTHON=$(POETRY_RUN) python
-JINJA_TREE=$(POETRY_RUN) jinja-tree
-MKDOCS=$(POETRY_RUN) mkdocs
 
 default: help
 
@@ -41,7 +39,7 @@ endif
 
 .PHONY: no-dirty
 no-dirty: ## Test if there are some dirty files
-	git diff --exit-code >/dev/null 2>&1 || (echo "ERROR: There are dirty files"; git status; git diff; exit 1)
+	@DIFF=`git status --short`; if test "$${DIFF}" != ""; then echo "ERROR: There are dirty files"; echo; git status; git diff; exit 1; fi
 
 .PHONY: test
 test: check_poetry ## Test the code
@@ -58,12 +56,6 @@ clean: ## Clean generated files
 	rm -Rf .venv
 	rm -Rf html
 	rm -Rf site
-
-.PHONY: doc
-doc: check_poetry ## Generate the documentation
-	cp -f README.md docs/index.md
-	$(JINJA_TREE) .
-	$(MKDOCS) build --clean --strict 
 
 .PHONY: help
 help:

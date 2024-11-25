@@ -20,7 +20,7 @@ def is_redis_available() -> bool:
         return __REDIS_AVAILABLE
     r = redis.Redis(socket_connect_timeout=2, socket_timeout=2)
     try:
-        __REDIS_AVAILABLE = r.ping()
+        __REDIS_AVAILABLE = r.ping() is True
     except Exception:
         __REDIS_AVAILABLE = False
     return __REDIS_AVAILABLE
