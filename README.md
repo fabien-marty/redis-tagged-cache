@@ -6,19 +6,23 @@
 
 ### Low level example
 
+Installation: `pip install redis-tagged-cache`
+
+Usage:
+
 ```python
-from redis_tagged_cache import RedisTaggedCache
+from rtc import RedisTaggedCache
 
 cache = RedisTaggedCache(
     namespace="foo",
-    redis_host="localhost",
-    redis_port=6379,
+    host="localhost",
+    port=6379,
 )
 
 invalidation_tags = ["tag1", "tag2"]  # tags are only strings of your choice
 
-# Let's store something in the cache under the key "key1" (with a 10s lifetime)
-cache.set("key1", b"value1", tags=invalidation_tags, lifetime=10)
+# Let's store something in the cache under the key "key1" (with a 60s lifetime)
+cache.set("key1", b"value1", tags=invalidation_tags, lifetime=60)
 
 print(cache.get("key1", tags=invalidation_tags))  # will output b"value1" (cache hit!)
 
@@ -38,13 +42,13 @@ from redis_tagged_cache import RedisTaggedCache
 
 cache = RedisTaggedCache(
     namespace="foo",
-    redis_host="localhost",
-    redis_port=6379,
+    host="localhost",
+    port=6379,
 )
 
 class A:
 
-    @cache.method_decorator(lifetime=10, tags=["tag1", "tag2"])
+    @cache.method_decorator(lifetime=60, tags=["tag1", "tag2"])
     def slow_method(self, arg1: str, arg2: str = "foo"):
         print("called")
         return arg1 + arg2
