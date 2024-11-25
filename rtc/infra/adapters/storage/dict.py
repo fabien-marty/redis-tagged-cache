@@ -1,6 +1,6 @@
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from rtc.app.storage import StoragePort
 
@@ -25,7 +25,7 @@ class DictStorageAdapter(StoragePort):
 
     """
 
-    _content: dict[str, Item] = field(default_factory=dict)
+    _content: Dict[str, Item] = field(default_factory=dict)
 
     def _get_expiration_lifetime(self, lifetime: Optional[int]) -> Optional[float]:
         if lifetime is not None:
