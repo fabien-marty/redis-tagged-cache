@@ -74,7 +74,7 @@ Note: complexity is O(n) regarding the number of tags.
 
 The invalidation system does not really remove keys from redis. Invalidated entries are inaccessible (from the API) but they are not removed when the invalidation occurred. They are going to expire by themselves.
 
-**Be sure to configure your redis instance as a cache with capped memory (see `maxmemory` configuration parameter) and `allkeys-lru` settings about keys [automatic eviction](https://redis.io/docs/latest/develop/reference/eviction/)**
+**Be sure to configure your redis instance as a cache with capped memory (see `maxmemory` configuration parameter) and `maxmemory-policy allkeys-lru` settings about keys [automatic eviction](https://redis.io/docs/latest/develop/reference/eviction/)**
 
 ## Dev
 
