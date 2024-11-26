@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import inspect
 import json
 import logging
 import pickle
@@ -194,11 +195,22 @@ class Service:
             def wrapped(*args: Any, **kwargs: Any):
                 key: str = ""
                 args_index: int = 0
+                sources: List[str] = [inspect.getfile(f)]
                 if ignore_first_argument and len(args) > 0:
                     args_index = 1
+                    try:
+                        sources.append(args[0].__class__.__name__)
+                    except Exception:
+                        pass
+                sources.append(f.__name__)
                 try:
                     serialized_args = json.dumps(
-                        [args[args_index:], kwargs], sort_keys=True
+                        [
+                            sources,
+                            args[args_index:],
+                            kwargs,
+                        ],
+                        sort_keys=True,
                     ).encode("utf-8")
                     key = _sha256_text_hash(serialized_args)
                 except Exception:
