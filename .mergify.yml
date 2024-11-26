@@ -27,7 +27,7 @@ queue_rules:
     commit_message_template: '{{ title }}'
     queue_conditions:
       - or:
-        - check-success = main_ci
+        - "check-success=ci / main_ci"
         - "-files~=^(?!CHANGELOG\\.md$).*$"
       - "-draft"
       - "-closed"
