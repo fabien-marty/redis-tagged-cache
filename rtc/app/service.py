@@ -40,6 +40,10 @@ def short_hash(data: Union[str, bytes]) -> str:
     )
 
 
+def get_logger() -> logging.Logger:
+    return logging.getLogger("redis-tagged-cache")
+
+
 @dataclass
 class Service:
     storage_adapter: StoragePort
@@ -48,6 +52,7 @@ class Service:
     lifetime_for_tags: Optional[int] = None
 
     namespace_hash: str = field(init=False, default="")
+    logger: logging.Logger = field(default_factory=get_logger)
 
     def __post_init__(self):
         self.namespace_hash = short_hash(self.namespace)
@@ -114,6 +119,10 @@ class Service:
 
     def invalidate_tag(self, tag_name: str) -> None:
         """Invalidate a tag given its name."""
+        if tag_name == SPECIAL_ALL_TAG_NAME:
+            self.logger.debug("Invalidating all cache")
+        else:
+            self.logger.debug(f"Invalidating tag {tag_name}")
         tag_storage_key = self.get_storage_tag_key(tag_name)
         self._invalidate_tag(tag_storage_key)
 
@@ -140,6 +149,9 @@ class Service:
         """
         storage_key = self.get_storage_value_key(key, tag_names)
         resolved_lifetime = self.resolve_lifetime(lifetime)
+        self.logger.debug(
+            "set value for cache key: %s and tags: %s", key, ", ".join(tag_names)
+        )
         self.storage_adapter.set(storage_key, value, lifetime=resolved_lifetime)
 
     def get_value(self, key: str, tag_names: List[str]) -> Optional[bytes]:
@@ -149,7 +161,16 @@ class Service:
 
         """
         storage_key = self.get_storage_value_key(key, tag_names)
-        return self.storage_adapter.mget([storage_key])[0]
+        res = self.storage_adapter.mget([storage_key])[0]
+        if res is None:
+            self.logger.debug(
+                "cache miss for key: %s and tags: %s", key, ", ".join(tag_names)
+            )
+        else:
+            self.logger.debug(
+                "cache hit for key: %s and tags: %s", key, ", ".join(tag_names)
+            )
+        return res
 
     def delete_value(self, key: str, tag_names: List[str]) -> None:
         """Delete the entry for the given key (with given invalidation tags).
@@ -158,6 +179,9 @@ class Service:
 
         """
         storage_key = self.get_storage_value_key(key, tag_names)
+        self.logger.debug(
+            "delete cache for key: %s and tags: %s", key, ", ".join(tag_names)
+        )
         self.storage_adapter.delete(storage_key)
 
     def _decorator(
