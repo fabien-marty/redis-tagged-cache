@@ -84,6 +84,27 @@ def test_function_decorator(service: Service):
     assert service.get_value("called", tag_names=[]) is None
 
 
+def test_function_decorator_multiple(service: Service):
+    @service.function_decorator(tag_names=["tag1", "tag2"])
+    def decorated(*args, **kwargs):
+        service.set_value("called", b"called", tag_names=[])
+        return [1, args, kwargs]
+
+    @service.function_decorator(tag_names=["tag1", "tag2"])
+    def decorated2(*args, **kwargs):
+        service.set_value("called2", b"called2", tag_names=[])
+        return [2, args, kwargs]
+
+    res = decorated(1, "2", foo="bar")
+    assert res == [1, (1, "2"), {"foo": "bar"}]
+    assert service.get_value("called", tag_names=[]) == b"called"
+    assert service.get_value("called2", tag_names=[]) is None
+
+    res = decorated2(1, "2", foo="bar")
+    assert res == [2, (1, "2"), {"foo": "bar"}]
+    assert service.get_value("called2", tag_names=[]) == b"called2"
+
+
 def test_method_decorator(service: Service):
     class A:
         @service.method_decorator(tag_names=["tag1", "tag2"])
