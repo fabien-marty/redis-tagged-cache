@@ -29,6 +29,7 @@ jobs:
         env:
           BRANCH: automatic-changelog
           BASE: main
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           DIFF=$(git status --short)
           if test "${DIFF}" = ""; then
