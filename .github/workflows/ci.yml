@@ -69,6 +69,14 @@ jobs:
         run: |
           make no-dirty
 
+  status: # this is a special job for mergify
+    runs-on: ubuntu-22.04
+    needs: main_ci
+    steps:
+      - name: Status
+        run: |
+          echo "OK"
+
   publish_pypi:
     runs-on: ubuntu-22.04
     needs: main_ci
