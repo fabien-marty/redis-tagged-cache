@@ -71,7 +71,7 @@ jobs:
 
   publish_pypi:
     runs-on: ubuntu-22.04
-    needs: lint_and_test
+    needs: main_ci
     if: github.event_name == 'release'
     steps:
       - name: Check out repository code
