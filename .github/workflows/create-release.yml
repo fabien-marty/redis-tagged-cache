@@ -50,6 +50,8 @@ jobs:
         run: |
           echo "tag=${{ steps.create-release.outputs.new-tag}}" >>"$GITHUB_OUTPUT"
       - name: Trigger changelog
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh workflow run changelog.yml
 
