@@ -1,7 +1,3 @@
-permissions:
-  contents: read
-  actions: write
-
 name: Create Release
 
 on:
@@ -54,11 +50,10 @@ jobs:
         id: output
         run: |
           echo "tag=${{ steps.create-release.outputs.new-tag}}" >>"$GITHUB_OUTPUT"
-      - name: Trigger changelog
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh workflow run changelog.yml
+      - name: Trigger changelog workflow
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: changelog.yml
 
   publish_pypi:
     runs-on: ubuntu-22.04
