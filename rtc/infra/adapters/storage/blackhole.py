@@ -20,7 +20,7 @@ class BlackHoleStorageAdapter(StoragePort):
     def get(self, storage_key: str) -> Optional[bytes]:
         return None
 
-    def delete(self, storage_key: str) -> None:
+    def mdelete(self, storage_keys: List[str]) -> None:
         pass
 
     def mget(self, storage_keys: List[str]) -> List[Optional[bytes]]:

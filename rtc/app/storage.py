@@ -34,10 +34,18 @@ class StoragePort(ABC):
         return self.mget([storage_key])[0]
 
     @abstractmethod
-    def delete(self, storage_key: str) -> None:
+    def mdelete(self, storage_keys: List[str]) -> None:
+        """Delete entries under the given keys.
+
+        Note: if a key does not exist, no exception is raised.
+
+        """
+        pass
+
+    def delete(self, storage_keys: str) -> None:
         """Delete the entry under the given key.
 
         Note: if the key does not exist, no exception is raised.
 
         """
-        pass
+        return self.mdelete([storage_keys])

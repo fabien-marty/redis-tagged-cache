@@ -49,8 +49,9 @@ class DictStorageAdapter(StoragePort):
             return None
         return item.value
 
-    def delete(self, storage_key: str) -> None:
-        self._content.pop(storage_key, None)
+    def mdelete(self, storage_keys: List[str]) -> None:
+        for storage_key in storage_keys:
+            self._content.pop(storage_key, None)
 
     def mget(self, storage_keys: List[str]) -> List[Optional[bytes]]:
         return [self.get(k) for k in storage_keys]

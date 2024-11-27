@@ -119,7 +119,7 @@ def test_method_decorator(service: Service):
     service.delete_value("called", tag_names=[])
     assert service.get_value("called", tag_names=[]) is None
 
-    service.invalidate_tag("tag2")
+    service.invalidate_tags(["tag2"])
     res = a.decorated(1, "2", foo="bar")
     assert res == [(1, "2"), {"foo": "bar"}]
     assert service.get_value("called", tag_names=[]) == b"called"

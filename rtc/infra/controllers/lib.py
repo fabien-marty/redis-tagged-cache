@@ -90,7 +90,7 @@ class RedisTaggedCache:
     def invalidate(self, tags: Union[str, List[str]]) -> None:
         """Invalidate entries with given tag/tags."""
         if isinstance(tags, str):
-            self._service.invalidate_tag(tags)
+            self._service.invalidate_tags([tags])
         else:
             self._service.invalidate_tags(tags)
 
