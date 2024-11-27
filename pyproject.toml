@@ -10,7 +10,7 @@ packages = [
 
 [tool.poetry.dependencies]
 python = "^3.7"
-redis = ">=4.6.0"
+redis = ">=3.2.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = { version = "^0.8", python = ">=3.9" }
