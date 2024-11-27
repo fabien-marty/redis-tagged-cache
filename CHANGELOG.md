@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [v0.1.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.1.0) (2024-11-26)
+
+#### Added
+
+- Add logging [\#6](https://github.com/fabien-marty/redis-tagged-cache/pull/6) ([fabien-marty](https://github.com/fabien-marty))
+
+#### Fixed
+
+- fix decorator usage with same parameters [\#7](https://github.com/fabien-marty/redis-tagged-cache/pull/7) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.0.5...v0.1.0)</sub>
+
 ## [v0.0.5](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.0.5) (2024-11-26)
 
 <sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.0.4...v0.0.5)</sub>
