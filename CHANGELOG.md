@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.1.2](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.1.2) (2024-11-27)
+
+#### Changed
+
+- relax redis requirements [\#11](https://github.com/fabien-marty/redis-tagged-cache/pull/11) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.1.1...v0.1.2)</sub>
+
 ## [v0.1.1](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.1.1) (2024-11-27)
 
 #### Changed
