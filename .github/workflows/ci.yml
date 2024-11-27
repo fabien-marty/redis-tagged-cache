@@ -4,9 +4,13 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - 'CHANGELOG.md'
   release:
     types: [published]
   pull_request:
+    paths-ignore:
+      - 'CHANGELOG.md'
 
 env:
   POETRY_HOME: /opt/poetry

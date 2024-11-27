@@ -40,7 +40,7 @@ jobs:
           fetch-depth: 0 # we need this because fetch-tags=true and because of a GHA bug: https://github.com/actions/checkout/issues/1471
           fetch-tags: true
       - id: create-release
-        uses: fabien-marty/github-create-next-semantic-release-action@v1
+        uses: fabien-marty/github-create-next-semantic-release-action@main
         with:
           github-token: ${{ github.token }} # Let's use the default value of the current workflow
           repository: ${{ github.repository }} # Let's use the default value of the current workflow
@@ -52,7 +52,7 @@ jobs:
       - name: Set output
         id: output
         run: |
-          echo "tag=${{ steps.create-release.outputs.new-tag}}" >>"$GITHUB_OUTPUT"
+          echo "tag=${{ steps.create-release.outputs.new-tag }}" >>"$GITHUB_OUTPUT"
       - name: Trigger changelog
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
