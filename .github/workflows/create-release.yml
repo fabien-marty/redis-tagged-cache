@@ -49,3 +49,36 @@ jobs:
         id: output
         run: |
           echo "tag=${{ steps.create-release.outputs.new-tag}}" >>"$GITHUB_OUTPUT"
+      - name: Trigger changelog
+        run: |
+          gh workflow run changelog.yml
+
+  publish_pypi:
+    runs-on: ubuntu-22.04
+    needs: release
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+      - name: Install poetry
+        run: |
+          python3 -m venv $POETRY_HOME
+          $POETRY_HOME/bin/pip install "poetry>=1.8.4,<1.9"
+      - name: Fix github path
+        run: |
+          echo "$POETRY_HOME/bin" >> "$GITHUB_PATH"
+      - name: Install requirements
+        run: |
+          poetry install
+      - name: Publish on Pypi
+        run: |
+          VERSION=`echo "${{ needs.release.outputs.tag }}" |sed 's/^v//g'`
+          cat pyproject.toml |sed 's/^version = ".*"$/version = "'${VERSION}'"/g' > pyproject.toml.new
+          mv -f pyproject.toml.new pyproject.toml
+          cat pyproject.toml |grep ^version
+          poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
+          poetry build
+          poetry publish
