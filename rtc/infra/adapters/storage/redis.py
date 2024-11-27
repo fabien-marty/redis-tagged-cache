@@ -25,11 +25,11 @@ class RedisStorageAdapter(StoragePort):
         except Exception:
             logging.warning("Failed to set value in Redis", exc_info=True)
 
-    def delete(self, storage_key: str) -> None:
+    def mdelete(self, storage_keys: List[str]) -> None:
         try:
-            self.redis_client.delete(storage_key)
+            self.redis_client.delete(*storage_keys)
         except Exception:
-            logging.warning("Failed to delete value in Redis", exc_info=True)
+            logging.warning("Failed to delete values in Redis", exc_info=True)
 
     def mget(self, storage_keys: List[str]) -> List[Optional[bytes]]:
         try:

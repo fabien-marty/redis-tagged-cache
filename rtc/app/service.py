@@ -74,18 +74,6 @@ class Service:
         tag_name_hash = short_hash(tag_name)
         return f"rtc:{self.namespace_hash}:t:{tag_name_hash}"
 
-    def _invalidate_tag(self, storage_tag_key: str) -> bytes:
-        """Invalidate the tag (given its storage_tag_key).
-
-        The new tag uuid value is returned.
-
-        """
-        new_value = short_hash(uuid.uuid4().bytes).encode("utf-8")
-        self.storage_adapter.set(
-            storage_tag_key, new_value, lifetime=self.lifetime_for_tags
-        )
-        return new_value
-
     def get_tag_values(self, tag_names: List[str]) -> List[bytes]:
         """Returns tag values (as a list) for a list of tag names.
 
@@ -103,7 +91,11 @@ class Service:
                 # First use of this tag! Let's generate a fist value
                 # Yes, there is a race condition here, but it's not a big problem
                 # (maybe we are going to invalidate the tag twice)
-                res.append(self._invalidate_tag(tag_storage_key))
+                new_value = short_hash(uuid.uuid4().bytes).encode("utf-8")
+                self.storage_adapter.set(
+                    tag_storage_key, new_value, lifetime=self.lifetime_for_tags
+                )
+                res.append(new_value)
             else:
                 res.append(value)
         return res
@@ -118,23 +110,18 @@ class Service:
         value_key_hash = short_hash(value_key)
         return f"rtc:{self.namespace_hash}:v:{value_key_hash}:{tags_hash}"
 
-    def invalidate_tag(self, tag_name: str) -> None:
-        """Invalidate a tag given its name."""
-        if tag_name == SPECIAL_ALL_TAG_NAME:
-            self.logger.debug("Invalidating all cache")
-        else:
-            self.logger.debug(f"Invalidating tag {tag_name}")
-        tag_storage_key = self.get_storage_tag_key(tag_name)
-        self._invalidate_tag(tag_storage_key)
-
     def invalidate_tags(self, tag_names: List[str]) -> None:
         """Invalidate a list of tag names."""
         for tag_name in tag_names:
-            self.invalidate_tag(tag_name)
+            if tag_name == SPECIAL_ALL_TAG_NAME:
+                self.logger.debug("Invalidating all cache")
+            else:
+                self.logger.debug(f"Invalidating tag {tag_name}")
+        self.storage_adapter.mdelete([self.get_storage_tag_key(t) for t in tag_names])
 
     def invalidate_all(self) -> None:
         """Invalidate all entries."""
-        self.invalidate_tag(SPECIAL_ALL_TAG_NAME)
+        self.invalidate_tags([SPECIAL_ALL_TAG_NAME])
 
     def set_value(
         self,
