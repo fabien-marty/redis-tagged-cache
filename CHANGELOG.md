@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.1.1](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.1.1) (2024-11-27)
+
+#### Changed
+
+- use less redis memory when invalidating tags [\#8](https://github.com/fabien-marty/redis-tagged-cache/pull/8) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.1.0...v0.1.1)</sub>
+
 ## [v0.1.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.1.0) (2024-11-26)
 
 #### Added
