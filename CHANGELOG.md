@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## [v0.1.3](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.1.3) (2024-11-27)
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.1.2...v0.1.3)</sub>
+
 ## [v0.1.2](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.1.2) (2024-11-27)
 
 #### Changed
