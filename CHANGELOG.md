@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.2.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.2.0) (2024-11-28)
+
+#### Added
+
+- add cache hit/miss hooks [\#19](https://github.com/fabien-marty/redis-tagged-cache/pull/19) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.1.11...v0.2.0)</sub>
+
 ## [v0.1.11](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.1.11) (2024-11-27)
 
 <sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.1.10...v0.1.11)</sub>
