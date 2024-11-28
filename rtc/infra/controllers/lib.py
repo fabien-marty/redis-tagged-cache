@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Union
+from typing import Callable, List, Optional, Union
 
 from rtc.app.service import Service
 from rtc.app.storage import StoragePort
@@ -10,15 +10,66 @@ from rtc.infra.adapters.storage.redis import RedisStorageAdapter
 @dataclass
 class RedisTaggedCache:
     namespace: str = "default"
+    """Namespace for the cache entries."""
+
     host: str = "localhost"
+    """Redis server hostname."""
+
     port: int = 6379
+    """Redis server port."""
+
     db: int = 0
+    """Redis database number."""
+
     ssl: bool = False
+    """Use SSL for the connection."""
+
     socket_timeout: int = 5
+    """Socket timeout in seconds."""
+
     socket_connect_timeout: int = 5
-    default_lifetime: Optional[int] = None
-    lifetime_for_tags: Optional[int] = None
+    """Socket connection timeout in seconds."""
+
+    default_lifetime: Optional[int] = 3600  # 1h
+    """Default lifetime for cache entries (in seconds).
+
+    Note: None means "no expiration" (be sure in that case that your redis is
+    configured to automatically evict keys even if they are not volatile).
+
+    """
+
+    lifetime_for_tags: Optional[int] = 86400  # 24h
+    """Lifetime for tags entries (in seconds).
+
+    If a tag used by a cache entry is invalidated, the cache entry is also invalidated.
+
+    Note: None means "no expiration" (be sure in that case that your redis is
+    configured to automatically evict keys even if they are not volatile).
+
+    """
+
     disabled: bool = False
+    """If True, the cache is disabled (no read, no write)."""
+
+    log_cache_hit: bool = True
+    """If True, log cache hits with standard logging with a debug message."""
+
+    log_cache_miss: bool = True
+    """If True, log cache miss with standard logging with a debug message."""
+
+    cache_hit_hook: Optional[Callable[[str, List[str]], None]] = None
+    """Optional custom hook called when a cache hit occurs.
+
+    Note: the hook is called with the key and the list of tags.
+
+    """
+
+    cache_miss_hook: Optional[Callable[[str, List[str]], None]] = None
+    """Optional custom hook called when a cache miss occurs.
+
+    Note: the hook is called with the key and the list of tags.
+
+    """
 
     _forced_adapter: Optional[StoragePort] = field(init=False, default=None)
     __service: Optional[Service] = field(init=False, default=None)
@@ -51,6 +102,10 @@ class RedisTaggedCache:
             namespace=self.namespace,
             default_lifetime=self.default_lifetime,
             lifetime_for_tags=self.lifetime_for_tags,
+            log_cache_hit=self.log_cache_hit,
+            log_cache_miss=self.log_cache_miss,
+            cache_hit_hook=self.cache_hit_hook,
+            cache_miss_hook=self.cache_miss_hook,
         )
 
     def get(self, key: str, tags: List[str]) -> Optional[bytes]:

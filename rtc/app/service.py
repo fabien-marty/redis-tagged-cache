@@ -6,7 +6,7 @@ import logging
 import pickle
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 from rtc.app.storage import StoragePort
 
@@ -51,12 +51,34 @@ class Service:
     namespace: str = "default"
     default_lifetime: Optional[int] = None
     lifetime_for_tags: Optional[int] = None
+    log_cache_hit: bool = True
+    log_cache_miss: bool = True
+    cache_hit_hook: Optional[Callable[[str, List[str]], None]] = None
+    cache_miss_hook: Optional[Callable[[str, List[str]], None]] = None
 
     namespace_hash: str = field(init=False, default="")
     logger: logging.Logger = field(default_factory=get_logger)
 
     def __post_init__(self):
         self.namespace_hash = short_hash(self.namespace)
+
+    def safe_call_hook(
+        self,
+        hook: Optional[Callable[[str, List[str]], None]],
+        str,
+        tag_names: List[str],
+    ) -> None:
+        """Call the given hook with the given arguments.
+
+        If an exception is raised, it is caught and logged. If the hook is None, nothing is done.
+
+        """
+        if not hook:
+            return
+        try:
+            hook(str, tag_names)
+        except Exception:
+            self.logger.warning(f"Error while calling hook {hook}", exc_info=True)
 
     def resolve_lifetime(self, lifetime: Optional[int]) -> Optional[int]:
         """Resolve the given lifetime with the default value.
@@ -93,7 +115,9 @@ class Service:
                 # (maybe we are going to invalidate the tag twice)
                 new_value = short_hash(uuid.uuid4().bytes).encode("utf-8")
                 self.storage_adapter.set(
-                    tag_storage_key, new_value, lifetime=self.lifetime_for_tags
+                    tag_storage_key,
+                    new_value,
+                    lifetime=self.lifetime_for_tags or self.default_lifetime,
                 )
                 res.append(new_value)
             else:
@@ -151,13 +175,17 @@ class Service:
         storage_key = self.get_storage_value_key(key, tag_names)
         res = self.storage_adapter.mget([storage_key])[0]
         if res is None:
-            self.logger.debug(
-                "cache miss for key: %s and tags: %s", key, ", ".join(tag_names)
-            )
+            if self.log_cache_miss:
+                self.logger.debug(
+                    "cache miss for key: %s and tags: %s", key, ", ".join(tag_names)
+                )
+            self.safe_call_hook(self.cache_miss_hook, key, tag_names)
         else:
-            self.logger.debug(
-                "cache hit for key: %s and tags: %s", key, ", ".join(tag_names)
-            )
+            if self.log_cache_hit:
+                self.logger.debug(
+                    "cache hit for key: %s and tags: %s", key, ", ".join(tag_names)
+                )
+            self.safe_call_hook(self.cache_hit_hook, key, tag_names)
         return res
 
     def delete_value(self, key: str, tag_names: List[str]) -> None:
@@ -172,7 +200,7 @@ class Service:
         )
         self.storage_adapter.delete(storage_key)
 
-    def _decorator(
+    def decorator(
         self,
         tag_names: List[str],
         ignore_first_argument: bool = False,
@@ -232,11 +260,11 @@ class Service:
         tag_names: List[str],
         lifetime: Optional[int] = None,
     ):
-        return self._decorator(tag_names, lifetime=lifetime)
+        return self.decorator(tag_names, lifetime=lifetime)
 
     def method_decorator(
         self,
         tag_names: List[str],
         lifetime: Optional[int] = None,
     ):
-        return self._decorator(tag_names, ignore_first_argument=True, lifetime=lifetime)
+        return self.decorator(tag_names, ignore_first_argument=True, lifetime=lifetime)
