@@ -205,6 +205,7 @@ class Service:
         tag_names: List[str],
         ignore_first_argument: bool = False,
         lifetime: Optional[int] = None,
+        dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
     ):
         def inner_decorator(f: Any):
             def wrapped(*args: Any, **kwargs: Any):
@@ -234,7 +235,21 @@ class Service:
                         exc_info=True,
                     )
                 if key:
-                    serialized_res = self.get_value(key, tag_names)
+                    if dynamic_tag_names:
+                        try:
+                            full_tag_names = tag_names + dynamic_tag_names(
+                                *(args[args_index:]), **kwargs
+                            )
+                        except Exception:
+                            logging.warning(
+                                "error while computing dynamic tag names => cache bypassed",
+                                exc_info=True,
+                            )
+                            key = ""
+                    else:
+                        full_tag_names = tag_names
+                if key:
+                    serialized_res = self.get_value(key, full_tag_names)
                     if serialized_res is not None:
                         # cache hit!
                         return pickle.loads(serialized_res)
@@ -248,7 +263,9 @@ class Service:
                             exc_info=True,
                         )
                     else:
-                        self.set_value(key, serialized, tag_names, lifetime=lifetime)
+                        self.set_value(
+                            key, serialized, full_tag_names, lifetime=lifetime
+                        )
                 return res
 
             return wrapped
@@ -259,12 +276,21 @@ class Service:
         self,
         tag_names: List[str],
         lifetime: Optional[int] = None,
+        dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
     ):
-        return self.decorator(tag_names, lifetime=lifetime)
+        return self.decorator(
+            tag_names, lifetime=lifetime, dynamic_tag_names=dynamic_tag_names
+        )
 
     def method_decorator(
         self,
         tag_names: List[str],
         lifetime: Optional[int] = None,
+        dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
     ):
-        return self.decorator(tag_names, ignore_first_argument=True, lifetime=lifetime)
+        return self.decorator(
+            tag_names,
+            ignore_first_argument=True,
+            lifetime=lifetime,
+            dynamic_tag_names=dynamic_tag_names,
+        )
