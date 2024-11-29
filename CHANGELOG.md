@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.3.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.3.0) (2024-11-29)
+
+#### Added
+
+- add dynamic tags feature [\#21](https://github.com/fabien-marty/redis-tagged-cache/pull/21) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.2.0...v0.3.0)</sub>
+
 ## [v0.2.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.2.0) (2024-11-28)
 
 #### Added
