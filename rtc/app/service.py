@@ -238,7 +238,7 @@ class Service:
                     if dynamic_tag_names:
                         try:
                             full_tag_names = tag_names + dynamic_tag_names(
-                                *(args[args_index:]), **kwargs
+                                *args, **kwargs
                             )
                         except Exception:
                             logging.warning(

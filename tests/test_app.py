@@ -129,7 +129,7 @@ def test_method_decorator(service: Service):
     assert service.get_value("called", tag_names=[]) is None
 
 
-def dynamic_tags(*args, **kwargs) -> List[str]:
+def dynamic_tags(self, *args, **kwargs) -> List[str]:
     assert args == (1, "2")
     return ["tag3"]
 

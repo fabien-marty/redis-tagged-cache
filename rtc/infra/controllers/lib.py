@@ -108,19 +108,19 @@ class RedisTaggedCache:
             cache_miss_hook=self.cache_miss_hook,
         )
 
-    def get(self, key: str, tags: List[str]) -> Optional[bytes]:
+    def get(self, key: str, tags: Optional[List[str]] = None) -> Optional[bytes]:
         """Read the value for the given key (with given invalidation tags).
 
         If the key does not exist (or invalidated), None is returned.
 
         """
-        return self._service.get_value(key, tags)
+        return self._service.get_value(key, tags or [])
 
     def set(
         self,
         key: str,
         value: Union[str, bytes],
-        tags: List[str],
+        tags: Optional[List[str]] = None,
         lifetime: Optional[int] = None,
     ) -> None:
         """Set a value for the given key (with given invalidation tags).
@@ -130,20 +130,22 @@ class RedisTaggedCache:
 
         """
         if isinstance(value, bytes):
-            self._service.set_value(key, value, tags, lifetime)
+            self._service.set_value(key, value, tags or [], lifetime)
         else:
-            self._service.set_value(key, value.encode("utf-8"), tags, lifetime)
+            self._service.set_value(key, value.encode("utf-8"), tags or [], lifetime)
 
-    def delete(self, key: str, tags: List[str]) -> None:
+    def delete(self, key: str, tags: Optional[List[str]] = None) -> None:
         """Delete the entry for the given key (with given invalidation tags).
 
         If the key does not exist (or invalidated), no exception is raised.
 
         """
-        self._service.delete_value(key, tags)
+        self._service.delete_value(key, tags or [])
 
-    def invalidate(self, tags: Union[str, List[str]]) -> None:
+    def invalidate(self, tags: Optional[Union[str, List[str]]] = None) -> None:
         """Invalidate entries with given tag/tags."""
+        if tags is None:
+            return
         if isinstance(tags, str):
             self._service.invalidate_tags([tags])
         else:
@@ -155,20 +157,20 @@ class RedisTaggedCache:
 
     def function_decorator(
         self,
-        tags: List[str],
+        tags: Optional[List[str]] = None,
         lifetime: Optional[int] = None,
-        dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
+        dynamic_tags: Optional[Callable[..., List[str]]] = None,
     ):
         return self._service.function_decorator(
-            tags, lifetime=lifetime, dynamic_tag_names=dynamic_tag_names
+            tags or [], lifetime=lifetime, dynamic_tag_names=dynamic_tags
         )
 
     def method_decorator(
         self,
-        tags: List[str],
+        tags: Optional[List[str]] = None,
         lifetime: Optional[int] = None,
-        dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
+        dynamic_tags: Optional[Callable[..., List[str]]] = None,
     ):
         return self._service.method_decorator(
-            tags, lifetime=lifetime, dynamic_tag_names=dynamic_tag_names
+            tags or [], lifetime=lifetime, dynamic_tag_names=dynamic_tags
         )
