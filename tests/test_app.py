@@ -1,3 +1,5 @@
+from typing import List
+
 import pytest
 
 from rtc.app.service import Service
@@ -125,3 +127,29 @@ def test_method_decorator(service: Service):
     assert service.get_value("called", tag_names=[]) == b"called"
     service.delete_value("called", tag_names=[])
     assert service.get_value("called", tag_names=[]) is None
+
+
+def dynamic_tags(*args, **kwargs) -> List[str]:
+    assert args == (1, "2")
+    return ["tag3"]
+
+
+def test_dynamic_tags(service: Service):
+    class A:
+        @service.method_decorator(
+            tag_names=["tag1", "tag2"], dynamic_tag_names=dynamic_tags
+        )
+        def decorated(self, *args, **kwargs):
+            service.set_value("called", b"called", tag_names=[])
+            return [args, kwargs]
+
+    a = A()
+    res = a.decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+    assert service.get_value("called", tag_names=[]) == b"called"
+    service.delete_value("called", tag_names=[])
+
+    service.invalidate_tags(["tag3"])
+    res = a.decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+    assert service.get_value("called", tag_names=[]) == b"called"
