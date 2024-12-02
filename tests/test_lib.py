@@ -1,5 +1,6 @@
 import os
 import uuid
+from typing import List
 
 import pytest
 
@@ -127,3 +128,48 @@ def test_hooks(instance: RedisTaggedCache):
     assert calls == ["hit"]
     assert instance.get("key2", ["tag3"]) is None
     assert calls == ["hit", "miss"]
+
+
+def dynamic_tags(self, *args, **kwargs) -> List[str]:
+    assert args == (1, "2")
+    return ["tag1", "tag2", "tag3"]
+
+
+def dynamic_key(self, *args, **kwargs) -> str:
+    assert args == (1, "2")
+    return "fookey"
+
+
+def test_dynamic_tags(instance: RedisTaggedCache):
+    class A:
+        @instance.method_decorator(tags=dynamic_tags)
+        def decorated(self, *args, **kwargs):
+            instance.set("called", b"called", tags=[])
+            return [args, kwargs]
+
+    a = A()
+    res = a.decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+    assert instance.get("called", tags=[]) == b"called"
+    instance.delete("called", tags=[])
+
+    instance.invalidate(["tag3"])
+    res = a.decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+    assert instance.get("called", tags=[]) == b"called"
+
+
+def test_dynamic_key(instance: RedisTaggedCache):
+    class A:
+        @instance.method_decorator(tags=dynamic_tags, key=dynamic_key)
+        def decorated(self, *args, **kwargs):
+            instance.set("called", b"called", tags=[])
+            return [args, kwargs]
+
+    a = A()
+    res = a.decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+    assert instance.get("called", tags=[]) == b"called"
+    instance.delete("called", tags=[])
+
+    assert instance.get("fookey", tags=["tag1", "tag2", "tag3"]) is not None

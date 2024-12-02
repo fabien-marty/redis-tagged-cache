@@ -206,6 +206,7 @@ class Service:
         ignore_first_argument: bool = False,
         lifetime: Optional[int] = None,
         dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
+        dynamic_key: Optional[Callable[..., str]] = None,
     ):
         def inner_decorator(f: Any):
             def wrapped(*args: Any, **kwargs: Any):
@@ -219,21 +220,30 @@ class Service:
                     except Exception:
                         pass
                 sources.append(f.__name__)
-                try:
-                    serialized_args = json.dumps(
-                        [
-                            sources,
-                            args[args_index:],
-                            kwargs,
-                        ],
-                        sort_keys=True,
-                    ).encode("utf-8")
-                    key = _sha256_text_hash(serialized_args)
-                except Exception:
-                    logging.warning(
-                        "arguments are not JSON serializable => cache bypassed",
-                        exc_info=True,
-                    )
+                if dynamic_key is not None:
+                    try:
+                        key = dynamic_key(*args, **kwargs)
+                    except Exception:
+                        logging.warning(
+                            "error while computing dynamic key => cache bypassed",
+                            exc_info=True,
+                        )
+                else:
+                    try:
+                        serialized_args = json.dumps(
+                            [
+                                sources,
+                                args[args_index:],
+                                kwargs,
+                            ],
+                            sort_keys=True,
+                        ).encode("utf-8")
+                        key = _sha256_text_hash(serialized_args)
+                    except Exception:
+                        logging.warning(
+                            "arguments are not JSON serializable => cache bypassed",
+                            exc_info=True,
+                        )
                 if key:
                     if dynamic_tag_names:
                         try:
@@ -271,26 +281,3 @@ class Service:
             return wrapped
 
         return inner_decorator
-
-    def function_decorator(
-        self,
-        tag_names: List[str],
-        lifetime: Optional[int] = None,
-        dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
-    ):
-        return self.decorator(
-            tag_names, lifetime=lifetime, dynamic_tag_names=dynamic_tag_names
-        )
-
-    def method_decorator(
-        self,
-        tag_names: List[str],
-        lifetime: Optional[int] = None,
-        dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
-    ):
-        return self.decorator(
-            tag_names,
-            ignore_first_argument=True,
-            lifetime=lifetime,
-            dynamic_tag_names=dynamic_tag_names,
-        )
