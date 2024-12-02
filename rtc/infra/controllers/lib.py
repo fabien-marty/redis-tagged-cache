@@ -157,20 +157,37 @@ class RedisTaggedCache:
 
     def function_decorator(
         self,
-        tags: Optional[List[str]] = None,
+        tags: Optional[Union[List[str], Callable[..., List[str]]]] = None,
         lifetime: Optional[int] = None,
-        dynamic_tags: Optional[Callable[..., List[str]]] = None,
+        key: Optional[Callable[..., str]] = None,
     ):
-        return self._service.function_decorator(
-            tags or [], lifetime=lifetime, dynamic_tag_names=dynamic_tags
-        )
+        if callable(tags):
+            return self._service.decorator(
+                [], lifetime=lifetime, dynamic_tag_names=tags, dynamic_key=key
+            )
+        else:
+            return self._service.decorator(
+                tags or [], lifetime=lifetime, dynamic_key=key
+            )
 
     def method_decorator(
         self,
-        tags: Optional[List[str]] = None,
+        tags: Optional[Union[List[str], Callable[..., List[str]]]] = None,
         lifetime: Optional[int] = None,
-        dynamic_tags: Optional[Callable[..., List[str]]] = None,
+        key: Optional[Callable[..., str]] = None,
     ):
-        return self._service.method_decorator(
-            tags or [], lifetime=lifetime, dynamic_tag_names=dynamic_tags
-        )
+        if callable(tags):
+            return self._service.decorator(
+                [],
+                lifetime=lifetime,
+                dynamic_tag_names=tags,
+                dynamic_key=key,
+                ignore_first_argument=True,
+            )
+        else:
+            return self._service.decorator(
+                tags or [],
+                lifetime=lifetime,
+                dynamic_key=key,
+                ignore_first_argument=True,
+            )
