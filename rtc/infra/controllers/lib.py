@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional, Union
+from typing import Any, Callable, List, Optional, Union
 
 from rtc.app.service import Service
 from rtc.app.storage import StoragePort
@@ -57,14 +57,14 @@ class RedisTaggedCache:
     log_cache_miss: bool = True
     """If True, log cache miss with standard logging with a debug message."""
 
-    cache_hit_hook: Optional[Callable[[str, List[str]], None]] = None
+    cache_hit_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
     """Optional custom hook called when a cache hit occurs.
 
     Note: the hook is called with the key and the list of tags.
 
     """
 
-    cache_miss_hook: Optional[Callable[[str, List[str]], None]] = None
+    cache_miss_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
     """Optional custom hook called when a cache miss occurs.
 
     Note: the hook is called with the key and the list of tags.
@@ -108,13 +108,18 @@ class RedisTaggedCache:
             cache_miss_hook=self.cache_miss_hook,
         )
 
-    def get(self, key: str, tags: Optional[List[str]] = None) -> Optional[bytes]:
+    def get(
+        self,
+        key: str,
+        tags: Optional[List[str]] = None,
+        hook_userdata: Optional[Any] = None,
+    ) -> Optional[bytes]:
         """Read the value for the given key (with given invalidation tags).
 
         If the key does not exist (or invalidated), None is returned.
 
         """
-        return self._service.get_value(key, tags or [])
+        return self._service.get_value(key, tags or [], hook_userdata=hook_userdata)
 
     def set(
         self,
@@ -160,14 +165,22 @@ class RedisTaggedCache:
         tags: Optional[Union[List[str], Callable[..., List[str]]]] = None,
         lifetime: Optional[int] = None,
         key: Optional[Callable[..., str]] = None,
+        hook_userdata: Optional[Any] = None,
     ):
         if callable(tags):
             return self._service.decorator(
-                [], lifetime=lifetime, dynamic_tag_names=tags, dynamic_key=key
+                [],
+                lifetime=lifetime,
+                dynamic_tag_names=tags,
+                dynamic_key=key,
+                hook_userdata=hook_userdata,
             )
         else:
             return self._service.decorator(
-                tags or [], lifetime=lifetime, dynamic_key=key
+                tags or [],
+                lifetime=lifetime,
+                dynamic_key=key,
+                hook_userdata=hook_userdata,
             )
 
     def method_decorator(
@@ -175,6 +188,7 @@ class RedisTaggedCache:
         tags: Optional[Union[List[str], Callable[..., List[str]]]] = None,
         lifetime: Optional[int] = None,
         key: Optional[Callable[..., str]] = None,
+        hook_userdata: Optional[Any] = None,
     ):
         if callable(tags):
             return self._service.decorator(
@@ -183,6 +197,7 @@ class RedisTaggedCache:
                 dynamic_tag_names=tags,
                 dynamic_key=key,
                 ignore_first_argument=True,
+                hook_userdata=hook_userdata,
             )
         else:
             return self._service.decorator(
@@ -190,4 +205,5 @@ class RedisTaggedCache:
                 lifetime=lifetime,
                 dynamic_key=key,
                 ignore_first_argument=True,
+                hook_userdata=hook_userdata,
             )

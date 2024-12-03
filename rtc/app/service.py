@@ -53,8 +53,8 @@ class Service:
     lifetime_for_tags: Optional[int] = None
     log_cache_hit: bool = True
     log_cache_miss: bool = True
-    cache_hit_hook: Optional[Callable[[str, List[str]], None]] = None
-    cache_miss_hook: Optional[Callable[[str, List[str]], None]] = None
+    cache_hit_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
+    cache_miss_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
 
     namespace_hash: str = field(init=False, default="")
     logger: logging.Logger = field(default_factory=get_logger)
@@ -64,9 +64,10 @@ class Service:
 
     def safe_call_hook(
         self,
-        hook: Optional[Callable[[str, List[str]], None]],
+        hook: Optional[Callable[[str, List[str], Optional[Any]], None]],
         str,
         tag_names: List[str],
+        userdata: Optional[Any] = None,
     ) -> None:
         """Call the given hook with the given arguments.
 
@@ -76,7 +77,7 @@ class Service:
         if not hook:
             return
         try:
-            hook(str, tag_names)
+            hook(str, tag_names, userdata)
         except Exception:
             self.logger.warning(f"Error while calling hook {hook}", exc_info=True)
 
@@ -166,7 +167,9 @@ class Service:
         )
         self.storage_adapter.set(storage_key, value, lifetime=resolved_lifetime)
 
-    def get_value(self, key: str, tag_names: List[str]) -> Optional[bytes]:
+    def get_value(
+        self, key: str, tag_names: List[str], hook_userdata: Optional[Any] = None
+    ) -> Optional[bytes]:
         """Read the value for the given key (with given invalidation tags).
 
         If the key does not exist (or invalidated), None is returned.
@@ -179,13 +182,13 @@ class Service:
                 self.logger.debug(
                     "cache miss for key: %s and tags: %s", key, ", ".join(tag_names)
                 )
-            self.safe_call_hook(self.cache_miss_hook, key, tag_names)
+            self.safe_call_hook(self.cache_miss_hook, key, tag_names, hook_userdata)
         else:
             if self.log_cache_hit:
                 self.logger.debug(
                     "cache hit for key: %s and tags: %s", key, ", ".join(tag_names)
                 )
-            self.safe_call_hook(self.cache_hit_hook, key, tag_names)
+            self.safe_call_hook(self.cache_hit_hook, key, tag_names, hook_userdata)
         return res
 
     def delete_value(self, key: str, tag_names: List[str]) -> None:
@@ -207,6 +210,7 @@ class Service:
         lifetime: Optional[int] = None,
         dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
         dynamic_key: Optional[Callable[..., str]] = None,
+        hook_userdata: Optional[Any] = None,
     ):
         def inner_decorator(f: Any):
             def wrapped(*args: Any, **kwargs: Any):
@@ -259,7 +263,9 @@ class Service:
                     else:
                         full_tag_names = tag_names
                 if key:
-                    serialized_res = self.get_value(key, full_tag_names)
+                    serialized_res = self.get_value(
+                        key, full_tag_names, hook_userdata=hook_userdata
+                    )
                     if serialized_res is not None:
                         # cache hit!
                         return pickle.loads(serialized_res)
