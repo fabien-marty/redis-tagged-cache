@@ -111,14 +111,16 @@ def test_invalidate_all(instance: RedisTaggedCache):
 def test_hooks(instance: RedisTaggedCache):
     calls = []
 
-    def cache_hit_hook(key, tags):
+    def cache_hit_hook(key, tags, userdata):
         assert key == "key1"
         assert tags == ["tag1", "tag2"]
+        assert userdata is None
         calls.append("hit")
 
-    def cache_miss_hook(key, tags):
+    def cache_miss_hook(key, tags, userdata):
         assert key == "key2"
         assert tags == ["tag3"]
+        assert userdata is None
         calls.append("miss")
 
     instance.cache_hit_hook = cache_hit_hook
@@ -127,6 +129,30 @@ def test_hooks(instance: RedisTaggedCache):
     assert instance.get("key1", ["tag1", "tag2"]) == b"value1"
     assert calls == ["hit"]
     assert instance.get("key2", ["tag3"]) is None
+    assert calls == ["hit", "miss"]
+
+
+def test_hooks_userdata(instance: RedisTaggedCache):
+    calls = []
+
+    def cache_hit_hook(key, tags, userdata):
+        assert key == "key1"
+        assert tags == ["tag1", "tag2"]
+        assert userdata == "foo"
+        calls.append("hit")
+
+    def cache_miss_hook(key, tags, userdata):
+        assert key == "key2"
+        assert tags == ["tag3"]
+        assert userdata == "foo"
+        calls.append("miss")
+
+    instance.cache_hit_hook = cache_hit_hook
+    instance.cache_miss_hook = cache_miss_hook
+    instance.set("key1", b"value1", ["tag1", "tag2"])
+    assert instance.get("key1", ["tag1", "tag2"], hook_userdata="foo") == b"value1"
+    assert calls == ["hit"]
+    assert instance.get("key2", ["tag3"], hook_userdata="foo") is None
     assert calls == ["hit", "miss"]
 
 
