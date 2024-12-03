@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.5.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.5.0) (2024-12-03)
+
+#### Added
+
+- add a way to provide some userdata [\#27](https://github.com/fabien-marty/redis-tagged-cache/pull/27) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.4.0...v0.5.0)</sub>
+
 ## [v0.4.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.4.0) (2024-12-02)
 
 #### Added
