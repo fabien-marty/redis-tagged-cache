@@ -12,17 +12,28 @@ packages = [
 python = "^3.7"
 redis = ">=3.2.0"
 
-[tool.poetry.group.dev.dependencies]
-ruff = { version = "^0.8", python = ">=3.9" }
-mypy = { version = "^1.13", python = ">=3.9" }
-tomli = [
-    { version = "~2.0", python = "<3.9" }
-]
+[tool.poetry.group.test.dependencies]
 pytest = [
     { version = "^8.3", python = ">=3.9" },
     { version = "~7.4", python = "<3.9" }
 ]
+tomli = [
+    { version = "~2.0", python = "<3.9" }
+]
+packaging = [
+    { version = "24.0", python = "<3.9" },
+    { version = ">= 24.2", python = ">=3.9" }
+]
+
+[tool.poetry.group.lint.dependencies]
+ruff = { version = "^0.8", python = ">=3.9" }
+mypy = { version = "^1.13", python = ">=3.9" }
+
+[tool.poetry.group.doc.dependencies]
 import-linter = { version = "^2.1", python = ">=3.9" }
+mkdocstrings = { extras = ["python"], version = "^0.27", python = ">=3.9" }
+mkdocs-material = { python = ">=3.9", version = "^9.5.47" }
+mkdocs-awesome-pages-plugin = { python = ">=3.9", version = "^2.9.3" }
 
 [build-system]
 requires = ["poetry-core"]
