@@ -9,6 +9,8 @@ from rtc.infra.adapters.storage.redis import RedisStorageAdapter
 
 @dataclass
 class RedisTaggedCache:
+    """This is the main."""
+
     namespace: str = "default"
     """Namespace for the cache entries."""
 
@@ -49,7 +51,7 @@ class RedisTaggedCache:
     """
 
     disabled: bool = False
-    """If True, the cache is disabled (no read, no write)."""
+    """If True, the cache is disabled (cache always missed and no write) but the API is still available."""
 
     log_cache_hit: bool = True
     """If True, log cache hits with standard logging with a debug message."""
@@ -60,19 +62,41 @@ class RedisTaggedCache:
     cache_hit_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
     """Optional custom hook called when a cache hit occurs.
 
-    Note: the hook is called with the key and the list of tags.
+    Note: the hook is called with the key, the list of tags and an optional userdata variable
+    (set with `hook_userdata` parameter of `get`/decorators method).
+
+    The signature of the hook must be:
+
+    ```python
+    def your_hook(key: str, tags: List[str], userdata: Optional[Any]) -> None:
+        # {your code here}
+        return
+    ```
 
     """
 
     cache_miss_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
     """Optional custom hook called when a cache miss occurs.
 
-    Note: the hook is called with the key and the list of tags.
+    Note: the hook is called with the key, the list of tags and an optional userdata variable
+    (set with `hook_userdata` parameter of `get`/decorators method).
+
+    The signature of the hook must be:
+
+    ```python
+    def your_hook(key: str, tags: List[str], userdata: Optional[Any]) -> None:
+        # {your code here}
+        return
+    ```
 
     """
 
-    _forced_adapter: Optional[StoragePort] = field(init=False, default=None)
-    __service: Optional[Service] = field(init=False, default=None)
+    _forced_adapter: Optional[StoragePort] = field(
+        init=False, default=None
+    )  # for unit-testing only
+    __service: Optional[Service] = field(
+        init=False, default=None
+    )  # cache of the Service object
 
     @property
     def _service(self) -> Service:
@@ -118,6 +142,8 @@ class RedisTaggedCache:
 
         If the key does not exist (or invalidated), None is returned.
 
+        `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else).
+
         """
         return self._service.get_value(key, tags or [], hook_userdata=hook_userdata)
 
@@ -148,7 +174,11 @@ class RedisTaggedCache:
         self._service.delete_value(key, tags or [])
 
     def invalidate(self, tags: Optional[Union[str, List[str]]] = None) -> None:
-        """Invalidate entries with given tag/tags."""
+        """Invalidate entries with given tag/tags.
+
+        Note: if tags is None, nothing is done.
+
+        """
         if tags is None:
             return
         if isinstance(tags, str):
@@ -157,7 +187,11 @@ class RedisTaggedCache:
             self._service.invalidate_tags(tags)
 
     def invalidate_all(self) -> None:
-        """Invalidate all entries."""
+        """Invalidate all entries.
+
+        Note: this is done by invalidating a special tag that is automatically used by all cache entries. So the complexity is still O(1).
+
+        """
         self._service.invalidate_all()
 
     def function_decorator(
@@ -167,6 +201,38 @@ class RedisTaggedCache:
         key: Optional[Callable[..., str]] = None,
         hook_userdata: Optional[Any] = None,
     ):
+        """Decorator for caching the result of a function.
+
+        Notes:
+
+        - for method, you should use `method_decorator` instead (because with `method_decorator` the first argument `self` is ignored in automatic key generation)
+        - the result of the function must be pickleable
+
+        - `tags` and `lifetime` are the same as for `set` method (but `tags` can also be a callable here to provide dynamic tags)
+        - `key` is an optional function that can be used to generate a custom key
+        - `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else)
+
+        If you don't provide a `key` argument, a key is automatically generated from the function name/location and its calling arguments (they must be JSON serializable).
+        You can override this behavior by providing a custom `key` function with following signature:
+
+        ```python
+        def custom_key(*args, **kwargs) -> str:
+            # {your code here to generate key}
+            # make your own key from *args, **kwargs that are the calling arguments of the decorated function
+            return key
+        ```
+
+        If you are interested by settings dynamic tags (i.e. tags that are computed at runtime depending on the function calling arguments), you can provide a callable for `tags` argument
+        with the following signature:
+
+        ```python
+        def dynamic_tags(*args, **kwargs) -> List[str]:
+            # {your code here to generate tags}
+            # make your own tags from *args, **kwargs that are the calling arguments of the decorated function
+            return tags
+        ```
+
+        """
         if callable(tags):
             return self._service.decorator(
                 [],
@@ -190,6 +256,38 @@ class RedisTaggedCache:
         key: Optional[Callable[..., str]] = None,
         hook_userdata: Optional[Any] = None,
     ):
+        """Decorator for caching the result of a method.
+
+        Notes:
+
+        - for functions, you should use `function_decorator` instead (because with `method_decorator` the first argument is ignored in automatic key generation)
+        - the result of the method must be pickleable
+
+        - `tags` and `lifetime` are the same as for `set` method (but `tags` can also be a callable here to provide dynamic tags)
+        - `key` is an optional method that can be used to generate a custom key
+        - `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else)
+
+        If you don't provide a `key` argument, a key is automatically generated from the method name/location and its calling arguments (they must be JSON serializable).
+        You can override this behavior by providing a custom `key` function with following signature:
+
+        ```python
+        def custom_key(*args, **kwargs) -> str:
+            # {your code here to generate key}
+            # make your own key from *args, **kwargs that are the calling arguments of the decorated method
+            return key
+        ```
+
+        If you are interested by settings dynamic tags (i.e. tags that are computed at runtime depending on the method calling arguments), you can provide a callable for `tags` argument
+        with the following signature:
+
+        ```python
+        def dynamic_tags(*args, **kwargs) -> List[str]:
+            # {your code here to generate tags}
+            # make your own tags from *args, **kwargs that are the calling arguments of the decorated method
+            return tags
+        ```
+
+        """
         if callable(tags):
             return self._service.decorator(
                 [],

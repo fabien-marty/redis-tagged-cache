@@ -47,13 +47,28 @@ jobs:
       - name: Fix github path
         run: |
           echo "$POETRY_HOME/bin" >> "$GITHUB_PATH"
-      - name: Install requirements
+      - name: Install requirements (Python 3.7 or 3.8)
+        if: matrix.python-version == '3.7' || matrix.python-version == '3.8'
+        run: |
+          poetry install --without lint --without doc
+      - name: Install requirements (Python >=3.9)
+        if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
         run: |
           poetry install
       - name: Run lint
         if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
         run: |
           make FIX=0 lint
+      - name: Run doc
+        if: matrix.python-version == '3.9'
+        run: |
+          make doc
+      - name: Upload site as an artifact
+        if: matrix.python-version == '3.9'
+        uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: site/
       - name: run unit tests
         run: |
           make test
@@ -72,6 +87,33 @@ jobs:
       - name: Checking for dirty files (again)
         run: |
           make no-dirty
+
+  githubpages:
+    runs-on: ubuntu-22.04
+    needs: main_ci
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: "pages"
+      cancel-in-progress: true
+    environment:
+      name: github-pages
+    #if: github.ref == 'refs/heads/main' && github.event_name == 'push' 
+    steps: 
+      - name: Download site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: site
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Upload entire repository
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   status: # this is a special job for mergify
     runs-on: ubuntu-22.04

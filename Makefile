@@ -8,6 +8,7 @@ LINT_IMPORTS=$(POETRY_RUN) lint-imports
 MYPY=$(POETRY_RUN) mypy
 PYTEST=$(POETRY_RUN) pytest
 PYTHON=$(POETRY_RUN) python
+MKDOCS=$(POETRY_RUN) mkdocs
 
 default: help
 
@@ -56,6 +57,11 @@ clean: ## Clean generated files
 	rm -Rf .venv
 	rm -Rf html
 	rm -Rf site
+
+.PHONY: doc
+doc: check_poetry ## Generate the documentation
+	cp -f README.md docs/index.md
+	$(MKDOCS) build --clean --strict 
 
 .PHONY: help
 help:
