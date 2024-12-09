@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [v0.6.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.6.0) (2024-12-09)
+
+#### Added
+
+- automatic serialization [breaking change] [\#31](https://github.com/fabien-marty/redis-tagged-cache/pull/31) ([fabien-marty](https://github.com/fabien-marty))
+
+#### Changed
+
+- First public doc version [\#29](https://github.com/fabien-marty/redis-tagged-cache/pull/29) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.5.0...v0.6.0)</sub>
+
 ## [v0.5.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.5.0) (2024-12-03)
 
 #### Added
