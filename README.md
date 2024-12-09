@@ -11,7 +11,7 @@ Installation: `pip install redis-tagged-cache`
 Usage:
 
 ```python
-from rtc import RedisTaggedCache
+from rtc import CacheMiss, RedisTaggedCache
 
 cache = RedisTaggedCache(
     namespace="foo",
@@ -21,10 +21,12 @@ cache = RedisTaggedCache(
 
 invalidation_tags = ["tag1", "tag2"]  # tags are only strings of your choice
 
-# Let's store something in the cache under the key "key1" (with a 60s lifetime)
-cache.set("key1", b"value1", tags=invalidation_tags, lifetime=60)
+# Let's store something in the cache under the key "key1"
+# (with a 60s lifetime)
+cache.set("key1", "my value", tags=invalidation_tags, lifetime=60)
 
-print(cache.get("key1", tags=invalidation_tags))  # will output b"value1" (cache hit!)
+# it will output "my value" (cache hit!)
+print(cache.get("key1", tags=invalidation_tags))
 
 # Let's invalidate a tag (O(1) operation)
 cache.invalidate("tag2")
@@ -32,7 +34,12 @@ cache.invalidate("tag2")
 # As the "key1" entry is tagged with "tag1" and "tag2"...
 # ...the entry is invalidated (because we just invalidated "tag2")
 
-print(cache.get("key1", tags=invalidation_tags))  # will output None (cache miss!)
+# It will print "cache miss"
+try:
+    cache.get("key1", tags=invalidation_tags)
+except CacheMiss:
+    print("cache miss")
+
 ```
 
 ### High level example
@@ -54,13 +61,24 @@ class A:
         return arg1 + arg2
 
 if __name__ == "__main__":
-    a = A()
-    print(a.slow_method("foo", arg2="bar"))  # will output "called" and "foobar" (cache miss)
-    print(a.slow_method("foo", arg2="bar"))  # will output "foobar" (cache hit)
-    print(a.slow_method("foo2", arg2="bar"))  # will output "called" and "foo2bar" (cache miss)
+    a = A()  
 
-# Note: for plain functions, you can use @cache.function_decorator that works the same way
+    # It will output "called" and "foobar" (cache miss)
+    print(a.slow_method("foo", arg2="bar"))
+
+    # It will output "foobar" (cache hit)
+    print(a.slow_method("foo", arg2="bar"))
+
+    # It will output "called" and "foo2bar" (cache miss)
+    print(a.slow_method("foo2", arg2="bar"))
+
+# Note: for plain functions, you can use @cache.function_decorator
+#       that works the same way
 ```
+
+## Full API
+
+You will find the full API in [this reference documentation](https://fabien-marty.github.io/redis-tagged-cache/reference/api/).
 
 ## Pros & Cons
 

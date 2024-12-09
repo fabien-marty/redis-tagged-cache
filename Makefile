@@ -57,6 +57,7 @@ clean: ## Clean generated files
 	rm -Rf .venv
 	rm -Rf html
 	rm -Rf site
+	rm -f docs/index.md
 
 .PHONY: doc
 doc: check_poetry ## Generate the documentation

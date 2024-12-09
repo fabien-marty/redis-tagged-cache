@@ -45,6 +45,12 @@ def get_logger() -> logging.Logger:
     return logging.getLogger("redis-tagged-cache")
 
 
+class CacheMiss(Exception):
+    """Exception raised when a cache miss occurs."""
+
+    pass
+
+
 @dataclass
 class Service:
     storage_adapter: StoragePort
@@ -211,6 +217,8 @@ class Service:
         dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
         dynamic_key: Optional[Callable[..., str]] = None,
         hook_userdata: Optional[Any] = None,
+        serializer: Callable[[Any], Optional[bytes]] = pickle.dumps,
+        unserializer: Callable[[bytes], Any] = pickle.loads,
     ):
         def inner_decorator(f: Any):
             def wrapped(*args: Any, **kwargs: Any):
@@ -268,17 +276,17 @@ class Service:
                     )
                     if serialized_res is not None:
                         # cache hit!
-                        return pickle.loads(serialized_res)
+                        try:
+                            return unserializer(serialized_res)
+                        except Exception:
+                            logging.warning(
+                                "error while unserializing cache value => cache bypassed",
+                                exc_info=True,
+                            )
                 res = f(*args, **kwargs)
                 if key:
-                    try:
-                        serialized = pickle.dumps(res)
-                    except Exception:
-                        logging.warning(
-                            "the returned value is not pickle serializable => cache bypassed",
-                            exc_info=True,
-                        )
-                    else:
+                    serialized = serializer(res)
+                    if serialized is not None:
                         self.set_value(
                             key, serialized, full_tag_names, lifetime=lifetime
                         )
