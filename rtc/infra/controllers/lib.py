@@ -1,7 +1,9 @@
+import logging
+import pickle
 from dataclasses import dataclass, field
 from typing import Any, Callable, List, Optional, Union
 
-from rtc.app.service import Service
+from rtc.app.service import CacheMiss, Service
 from rtc.app.storage import StoragePort
 from rtc.infra.adapters.storage.blackhole import BlackHoleStorageAdapter
 from rtc.infra.adapters.storage.redis import RedisStorageAdapter
@@ -9,7 +11,7 @@ from rtc.infra.adapters.storage.redis import RedisStorageAdapter
 
 @dataclass
 class RedisTaggedCache:
-    """This is the main."""
+    """Main class for Redis-based tagged cache."""
 
     namespace: str = "default"
     """Namespace for the cache entries."""
@@ -91,6 +93,12 @@ class RedisTaggedCache:
 
     """
 
+    serializer: Callable[[Any], Optional[bytes]] = pickle.dumps
+    """Serializer function to serialize data before storing it in the cache."""
+
+    unserializer: Callable[[bytes], Any] = pickle.loads
+    """Unserializer function to unserialize data after reading it from the cache."""
+
     _forced_adapter: Optional[StoragePort] = field(
         init=False, default=None
     )  # for unit-testing only
@@ -132,25 +140,54 @@ class RedisTaggedCache:
             cache_miss_hook=self.cache_miss_hook,
         )
 
+    def _serialize(self, value: Any) -> Optional[bytes]:
+        try:
+            return self.serializer(value)
+        except Exception:
+            logging.warning(
+                "error when serializing provided data => cache bypassed",
+                exc_info=True,
+            )
+            return None
+
+    def _unserialize(self, value: bytes) -> Any:
+        try:
+            return self.unserializer(value)
+        except Exception:
+            logging.warning(
+                "error when unserializing cached data => cache bypassed",
+                exc_info=True,
+            )
+            raise
+
     def get(
         self,
         key: str,
         tags: Optional[List[str]] = None,
         hook_userdata: Optional[Any] = None,
-    ) -> Optional[bytes]:
+    ) -> Any:
         """Read the value for the given key (with given invalidation tags).
 
         If the key does not exist (or invalidated), None is returned.
 
         `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else).
 
+        Raised:
+            CacheMiss: if the key does not exist (or expired/invalidated).
+
         """
-        return self._service.get_value(key, tags or [], hook_userdata=hook_userdata)
+        tmp = self._service.get_value(key, tags or [], hook_userdata=hook_userdata)
+        if tmp is None:
+            raise CacheMiss()
+        try:
+            return self._unserialize(tmp)
+        except Exception:
+            return CacheMiss()
 
     def set(
         self,
         key: str,
-        value: Union[str, bytes],
+        value: Any,
         tags: Optional[List[str]] = None,
         lifetime: Optional[int] = None,
     ) -> None:
@@ -160,10 +197,9 @@ class RedisTaggedCache:
         0 means no expiration).
 
         """
-        if isinstance(value, bytes):
-            self._service.set_value(key, value, tags or [], lifetime)
-        else:
-            self._service.set_value(key, value.encode("utf-8"), tags or [], lifetime)
+        tmp = self._serialize(value)
+        if tmp is not None:
+            self._service.set_value(key, tmp, tags or [], lifetime)
 
     def delete(self, key: str, tags: Optional[List[str]] = None) -> None:
         """Delete the entry for the given key (with given invalidation tags).
@@ -240,6 +276,8 @@ class RedisTaggedCache:
                 dynamic_tag_names=tags,
                 dynamic_key=key,
                 hook_userdata=hook_userdata,
+                serializer=self._serialize,
+                unserializer=self._unserialize,
             )
         else:
             return self._service.decorator(
@@ -247,6 +285,8 @@ class RedisTaggedCache:
                 lifetime=lifetime,
                 dynamic_key=key,
                 hook_userdata=hook_userdata,
+                serializer=self._serialize,
+                unserializer=self._unserialize,
             )
 
     def method_decorator(
@@ -296,6 +336,8 @@ class RedisTaggedCache:
                 dynamic_key=key,
                 ignore_first_argument=True,
                 hook_userdata=hook_userdata,
+                serializer=self._serialize,
+                unserializer=self._unserialize,
             )
         else:
             return self._service.decorator(
@@ -304,4 +346,6 @@ class RedisTaggedCache:
                 dynamic_key=key,
                 ignore_first_argument=True,
                 hook_userdata=hook_userdata,
+                serializer=self._serialize,
+                unserializer=self._unserialize,
             )

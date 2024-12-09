@@ -5,7 +5,7 @@ from typing import List
 import pytest
 
 from rtc.infra.adapters.storage.dict import DictStorageAdapter
-from rtc.infra.controllers.lib import RedisTaggedCache
+from rtc.infra.controllers.lib import CacheMiss, RedisTaggedCache
 
 REDIS_HOST = os.getenv("REDIS_HOST", "")
 REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
@@ -33,21 +33,26 @@ def test_basic(instance: RedisTaggedCache):
     instance.set("foo", b"value", tags=["tag1", "tag2"])
     assert instance.get("foo", tags=["tag1", "tag2"]) == b"value"
     instance.delete("foo", tags=["tag1", "tag2"])
-    assert instance.get("foo", tags=["tag1", "tag2"]) is None
+    with pytest.raises(CacheMiss):
+        instance.get("foo", tags=["tag1", "tag2"])
     instance.set("foo", b"value", tags=["tag1", "tag2"])
     assert instance.get("foo", tags=["tag1", "tag2"]) == b"value"
     instance.invalidate("tag2")
-    assert instance.get("foo", tags=["tag1", "tag2"]) is None
+    with pytest.raises(CacheMiss):
+        instance.get("foo", tags=["tag1", "tag2"])
 
 
 def test_blackhole():
     inst = _instance(disabled=True)
     inst.set("foo", b"value", tags=["tag1", "tag2"])
-    assert inst.get("foo", tags=["tag1", "tag2"]) is None
+    with pytest.raises(CacheMiss):
+        inst.get("foo", tags=["tag1", "tag2"])
     inst.delete("foo", tags=["tag1", "tag2"])
-    assert inst.get("foo", tags=["tag1", "tag2"]) is None
+    with pytest.raises(CacheMiss):
+        inst.get("foo", tags=["tag1", "tag2"])
     inst.invalidate("tag2")
-    assert inst.get("foo", tags=["tag1", "tag2"]) is None
+    with pytest.raises(CacheMiss):
+        inst.get("foo", tags=["tag1", "tag2"])
 
 
 def test_function_decorator(instance: RedisTaggedCache):
@@ -60,17 +65,20 @@ def test_function_decorator(instance: RedisTaggedCache):
     assert res == [(1, "2"), {"foo": "bar"}]
     assert instance.get("called", tags=[]) == b"called"
     instance.delete("called", tags=[])
-    assert instance.get("called", tags=[]) is None
+    with pytest.raises(CacheMiss):
+        instance.get("called", tags=[])
 
     res = decorated(1, "2", foo="bar")
     assert res == [(1, "2"), {"foo": "bar"}]
-    assert instance.get("called", tags=[]) is None
+    with pytest.raises(CacheMiss):
+        instance.get("called", tags=[])
 
     res = decorated(1, 2, foo="bar")
     assert res == [(1, 2), {"foo": "bar"}]
     assert instance.get("called", tags=[]) == b"called"
     instance.delete("called", tags=[])
-    assert instance.get("called", tags=[]) is None
+    with pytest.raises(CacheMiss):
+        instance.get("called", tags=[])
 
 
 def test_method_decorator(instance: RedisTaggedCache):
@@ -85,14 +93,16 @@ def test_method_decorator(instance: RedisTaggedCache):
     assert res == [(1, "2"), {"foo": "bar"}]
     assert instance.get("called", tags=[]) == b"called"
     instance.delete("called", tags=[])
-    assert instance.get("called", tags=[]) is None
+    with pytest.raises(CacheMiss):
+        instance.get("called", tags=[])
 
     instance.invalidate("tag2")
     res = a.decorated(1, "2", foo="bar")
     assert res == [(1, "2"), {"foo": "bar"}]
     assert instance.get("called", tags=[]) == b"called"
     instance.delete("called", tags=[])
-    assert instance.get("called", tags=[]) is None
+    with pytest.raises(CacheMiss):
+        instance.get("called", tags=[])
 
 
 def test_invalidate_all(instance: RedisTaggedCache):
@@ -103,9 +113,12 @@ def test_invalidate_all(instance: RedisTaggedCache):
     assert instance.get("key", ["tag3"]) == b"value2"
     assert instance.get("key", []) == b"value3"
     instance.invalidate_all()
-    assert instance.get("key", ["tag1", "tag2"]) is None
-    assert instance.get("key", ["tag3"]) is None
-    assert instance.get("key", []) is None
+    with pytest.raises(CacheMiss):
+        instance.get("key", ["tag1", "tag2"])
+    with pytest.raises(CacheMiss):
+        instance.get("key", ["tag3"])
+    with pytest.raises(CacheMiss):
+        instance.get("key", [])
 
 
 def test_hooks(instance: RedisTaggedCache):
@@ -128,7 +141,8 @@ def test_hooks(instance: RedisTaggedCache):
     instance.set("key1", b"value1", ["tag1", "tag2"])
     assert instance.get("key1", ["tag1", "tag2"]) == b"value1"
     assert calls == ["hit"]
-    assert instance.get("key2", ["tag3"]) is None
+    with pytest.raises(CacheMiss):
+        instance.get("key2", ["tag3"])
     assert calls == ["hit", "miss"]
 
 
@@ -152,7 +166,8 @@ def test_hooks_userdata(instance: RedisTaggedCache):
     instance.set("key1", b"value1", ["tag1", "tag2"])
     assert instance.get("key1", ["tag1", "tag2"], hook_userdata="foo") == b"value1"
     assert calls == ["hit"]
-    assert instance.get("key2", ["tag3"], hook_userdata="foo") is None
+    with pytest.raises(CacheMiss):
+        instance.get("key2", ["tag3"], hook_userdata="foo")
     assert calls == ["hit", "miss"]
 
 
