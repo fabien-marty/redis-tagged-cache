@@ -1,0 +1,33 @@
+{{ JINJA_TREE_STYLE1_GENERATED_COMMENT }}
+
+# How to define custom serializers / unserializers?
+
+## Introduction
+
+All values stored in the cache (with low-level API or with high-level decorators) are serialized into bytes before being stored in redis.
+
+By default, with use [`the standard pickle module`](https://docs.python.org/3/library/pickle.html) to serialize/unserialize.
+
+But you may want to override this default setting:
+
+- to compress the data inside the cache
+- to avoid the serialization/unserialization process overhead (if you store only bytes in the cache)
+- ...
+
+## How to compress the data inside the cache
+
+```python
+{{ "cat serialization1.py" |shell() }}
+```
+
+## How to bypass the serialization
+
+!!! warning "Warning to the high level decorators!"
+
+    If you are sure to use only bytes as values in the cache low-level API, 
+    be careful about the high-level decorators that automatically cache the returned value
+    of functions/methods. In that particular case, they also have to return bytes!
+
+```python
+{{ "cat serialization2.py" |shell() }}
+```

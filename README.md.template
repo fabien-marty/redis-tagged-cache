@@ -1,0 +1,50 @@
+{{ JINJA_TREE_STYLE1_GENERATED_COMMENT }}
+    
+# redis-tagged-cache
+
+## What is it?
+
+`redis-tagged-cache` is a Python 3.7+ cache library backed with Redis **with O(1) tags-based invalidation system**.
+
+### Low level example
+
+Installation: `pip install redis-tagged-cache`
+
+Usage:
+
+```python
+{{ "cat docs/tutorial/low-level-example1.py"|shell() }}
+```
+
+### High level example
+
+```python
+{{ "cat docs/tutorial/high-level-example1.py"|shell() }}
+```
+
+## Full API
+
+You will find the full API in [this reference documentation](https://fabien-marty.github.io/redis-tagged-cache/reference/api/).
+
+## Pros & Cons
+
+### Pros
+
+All methods have a O(1) complexity regarding the number of keys. The invalidation is synchronous and very fast event if you invalidate millions of keys.
+
+Note: complexity is O(n) regarding the number of tags.
+
+### Cons
+
+The invalidation system does not really remove keys from redis. Invalidated entries are inaccessible (from the API) but they are not removed when the invalidation occurred. They are going to expire by themselves.
+
+**Be sure to configure your redis instance as a cache with capped memory (see `maxmemory` configuration parameter) and `maxmemory-policy allkeys-lru` settings about keys [automatic eviction](https://redis.io/docs/latest/develop/reference/eviction/)**
+
+## Dev
+
+As we support Python 3.7+ for the runtime, the dev environment requires Python 3.9+.
+
+- `make lint`: for linting the code
+- `make test`: for executing test
+
+(the poetry env will be automatically created)
