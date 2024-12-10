@@ -9,6 +9,7 @@ MYPY=$(POETRY_RUN) mypy
 PYTEST=$(POETRY_RUN) pytest
 PYTHON=$(POETRY_RUN) python
 MKDOCS=$(POETRY_RUN) mkdocs
+JINJA_TREE=$(POETRY_RUN) jinja-tree
 
 default: help
 
@@ -61,6 +62,7 @@ clean: ## Clean generated files
 
 .PHONY: doc
 doc: check_poetry ## Generate the documentation
+	$(JINJA_TREE) .
 	cp -f README.md docs/index.md
 	$(MKDOCS) build --clean --strict 
 

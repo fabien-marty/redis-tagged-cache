@@ -93,7 +93,7 @@ class RedisTaggedCache:
 
     """
 
-    serializer: Callable[[Any], Optional[bytes]] = pickle.dumps
+    serializer: Callable[[Any], bytes] = pickle.dumps
     """Serializer function to serialize data before storing it in the cache."""
 
     unserializer: Callable[[bytes], Any] = pickle.loads
