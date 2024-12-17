@@ -176,13 +176,41 @@ class RedisTaggedCache:
             CacheMiss: if the key does not exist (or expired/invalidated).
 
         """
-        tmp = self._service.get_value(key, tags or [], hook_userdata=hook_userdata)
-        if tmp is None:
-            raise CacheMiss()
-        try:
-            return self._unserialize(tmp)
-        except Exception:
-            return CacheMiss()
+        tmp = self.mget([key], tags or [], hook_userdata=hook_userdata)
+        if isinstance(tmp[0], CacheMiss):
+            raise tmp[0]
+        return tmp[0]
+
+    def mget(
+        self,
+        keys: List[str],
+        tags: Optional[List[str]] = None,
+        hook_userdata: Optional[Any] = None,
+    ) -> List[Any]:
+        """Read the values for the given keys (with given invalidation tags).
+
+        If a key does not exist (or invalidated), a CacheMiss object is returned.
+        No exception is raised by this method.
+
+        The returned list has the same length as the input list of keys. Of course, the order of results
+        is the same as the order of keys.
+
+        `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else).
+
+        """
+        res: List[Any] = []
+        serialized_values = self._service.get_values(
+            keys, tags or [], hook_userdata=hook_userdata
+        )
+        for value in serialized_values:
+            if value is None:
+                res.append(CacheMiss())
+            else:
+                try:
+                    res.append(self._unserialize(value))
+                except Exception:
+                    res.append(CacheMiss())
+        return res
 
     def set(
         self,

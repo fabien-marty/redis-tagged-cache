@@ -42,6 +42,20 @@ def test_basic(instance: RedisTaggedCache):
         instance.get("foo", tags=["tag1", "tag2"])
 
 
+def test_mget(instance: RedisTaggedCache):
+    instance.set("foo1", b"value1", tags=["tag1", "tag2"])
+    instance.set("foo2", b"value2", tags=["tag1", "tag2"])
+    values = instance.mget(["foo1", "foo2", "foo3"], tags=["tag1", "tag2"])
+    assert values[0] == b"value1"
+    assert values[1] == b"value2"
+    assert isinstance(values[2], CacheMiss)
+    instance.invalidate_all()
+    values = instance.mget(["foo1", "foo2", "foo3"], tags=["tag1", "tag2"])
+    assert isinstance(values[0], CacheMiss)
+    assert isinstance(values[1], CacheMiss)
+    assert isinstance(values[2], CacheMiss)
+
+
 def test_blackhole():
     inst = _instance(disabled=True)
     inst.set("foo", b"value", tags=["tag1", "tag2"])
