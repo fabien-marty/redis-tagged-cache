@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [v0.7.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.7.0) (2024-12-18)
+
+#### Added
+
+- CacheCallInfo intro and better CacheHook types [\#34](https://github.com/fabien-marty/redis-tagged-cache/pull/34) ([fabien-marty](https://github.com/fabien-marty))
+- remove cache_hit/miss logging options [\#35](https://github.com/fabien-marty/redis-tagged-cache/pull/35) ([fabien-marty](https://github.com/fabien-marty))
+
+#### Changed
+
+- better documentation [\#33](https://github.com/fabien-marty/redis-tagged-cache/pull/33) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.6.0...v0.7.0)</sub>
+
 ## [v0.6.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.6.0) (2024-12-09)
 
 #### Added
