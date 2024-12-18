@@ -10,6 +10,15 @@ from typing import Any, Callable, List, Optional, Union
 
 from rtc.app.storage import StoragePort
 
+PROTOCOL_AVAILABLE = False
+try:
+    from typing import Protocol
+
+    PROTOCOL_AVAILABLE = True
+except Exception:
+    pass
+
+
 SPECIAL_ALL_TAG_NAME = "@@@all@@@"
 
 
@@ -51,6 +60,43 @@ class CacheMiss(Exception):
     pass
 
 
+@dataclass(frozen=True)
+class CacheCallInfo:
+    """Class containing location infos about the cache call.
+
+    This is only used in cache hit/miss hooks and only for decorators.
+
+    """
+
+    filepath: str
+    """File path of the decorated function."""
+
+    class_name: str
+    """Class name (empty for functions) of the decorated function."""
+
+    function_name: str
+    """Function name of the decorated function/method."""
+
+    def _dump(self) -> List:
+        return [self.filepath, self.class_name, self.function_name]
+
+
+if PROTOCOL_AVAILABLE:
+
+    class CacheHook(Protocol):
+        def __call__(
+            self,
+            cache_key: str,
+            cache_tags: List[str],
+            userdata: Any = None,
+            call_info: Optional[CacheCallInfo] = None,
+            **kwargs,
+        ) -> None: ...
+
+else:
+    CacheHook = Callable  # type: ignore
+
+
 @dataclass
 class Service:
     storage_adapter: StoragePort
@@ -59,8 +105,8 @@ class Service:
     lifetime_for_tags: Optional[int] = None
     log_cache_hit: bool = True
     log_cache_miss: bool = True
-    cache_hit_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
-    cache_miss_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
+    cache_hit_hook: Optional[CacheHook] = None
+    cache_miss_hook: Optional[CacheHook] = None
 
     namespace_hash: str = field(init=False, default="")
     logger: logging.Logger = field(default_factory=get_logger)
@@ -70,10 +116,11 @@ class Service:
 
     def safe_call_hook(
         self,
-        hook: Optional[Callable[[str, List[str], Optional[Any]], None]],
+        hook: Optional[CacheHook],
         str,
         tag_names: List[str],
         userdata: Optional[Any] = None,
+        call_info: Optional[CacheCallInfo] = None,
     ) -> None:
         """Call the given hook with the given arguments.
 
@@ -83,7 +130,7 @@ class Service:
         if not hook:
             return
         try:
-            hook(str, tag_names, userdata)
+            hook(str, tag_names, userdata=userdata, call_info=call_info)
         except Exception:
             self.logger.warning(f"Error while calling hook {hook}", exc_info=True)
 
@@ -174,7 +221,11 @@ class Service:
         self.storage_adapter.set(storage_key, value, lifetime=resolved_lifetime)
 
     def get_value(
-        self, key: str, tag_names: List[str], hook_userdata: Optional[Any] = None
+        self,
+        key: str,
+        tag_names: List[str],
+        hook_userdata: Optional[Any] = None,
+        call_info: Optional[CacheCallInfo] = None,
     ) -> Optional[bytes]:
         """Read the value for the given key (with given invalidation tags).
 
@@ -188,13 +239,17 @@ class Service:
                 self.logger.debug(
                     "cache miss for key: %s and tags: %s", key, ", ".join(tag_names)
                 )
-            self.safe_call_hook(self.cache_miss_hook, key, tag_names, hook_userdata)
+            self.safe_call_hook(
+                self.cache_miss_hook, key, tag_names, hook_userdata, call_info
+            )
         else:
             if self.log_cache_hit:
                 self.logger.debug(
                     "cache hit for key: %s and tags: %s", key, ", ".join(tag_names)
                 )
-            self.safe_call_hook(self.cache_hit_hook, key, tag_names, hook_userdata)
+            self.safe_call_hook(
+                self.cache_hit_hook, key, tag_names, hook_userdata, call_info
+            )
         return res
 
     def delete_value(self, key: str, tag_names: List[str]) -> None:
@@ -224,17 +279,26 @@ class Service:
             def wrapped(*args: Any, **kwargs: Any):
                 key: str = ""
                 args_index: int = 0
-                sources: List[str] = [inspect.getfile(f)]
+                class_name: str = ""
                 if ignore_first_argument and len(args) > 0:
                     args_index = 1
                     try:
-                        sources.append(args[0].__class__.__name__)
+                        class_name = args[0].__class__.__name__
                     except Exception:
                         pass
-                sources.append(f.__name__)
+                call_info = CacheCallInfo(
+                    filepath=inspect.getfile(f),
+                    class_name=class_name,
+                    function_name=f.__name__,
+                )
                 if dynamic_key is not None:
                     try:
-                        key = dynamic_key(*args, **kwargs)
+                        if "rtc_call_info" in kwargs:
+                            key = dynamic_key(*args, **kwargs)
+                        else:
+                            key = dynamic_key(
+                                *args, **{**kwargs, "rtc_call_info": call_info}
+                            )
                     except Exception:
                         logging.warning(
                             "error while computing dynamic key => cache bypassed",
@@ -244,7 +308,7 @@ class Service:
                     try:
                         serialized_args = json.dumps(
                             [
-                                sources,
+                                call_info._dump(),
                                 args[args_index:],
                                 kwargs,
                             ],
@@ -259,9 +323,14 @@ class Service:
                 if key:
                     if dynamic_tag_names:
                         try:
-                            full_tag_names = tag_names + dynamic_tag_names(
-                                *args, **kwargs
-                            )
+                            if "rtc_call_info" in kwargs:
+                                full_tag_names = tag_names + dynamic_tag_names(
+                                    *args, **kwargs
+                                )
+                            else:
+                                full_tag_names = tag_names + dynamic_tag_names(
+                                    *args, **{**kwargs, "rtc_call_info": call_info}
+                                )
                         except Exception:
                             logging.warning(
                                 "error while computing dynamic tag names => cache bypassed",
@@ -272,7 +341,10 @@ class Service:
                         full_tag_names = tag_names
                 if key:
                     serialized_res = self.get_value(
-                        key, full_tag_names, hook_userdata=hook_userdata
+                        key,
+                        full_tag_names,
+                        hook_userdata=hook_userdata,
+                        call_info=call_info,
                     )
                     if serialized_res is not None:
                         # cache hit!
