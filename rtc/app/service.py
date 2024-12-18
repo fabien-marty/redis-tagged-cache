@@ -6,9 +6,18 @@ import logging
 import pickle
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional, Protocol, Union
+from typing import Any, Callable, List, Optional, Union
 
 from rtc.app.storage import StoragePort
+
+PROTOCOL_AVAILABLE = False
+try:
+    from typing import Protocol
+
+    PROTOCOL_AVAILABLE = True
+except Exception:
+    pass
+
 
 SPECIAL_ALL_TAG_NAME = "@@@all@@@"
 
@@ -72,15 +81,20 @@ class CacheCallInfo:
         return [self.filepath, self.class_name, self.function_name]
 
 
-class CacheHook(Protocol):
-    def __call__(
-        self,
-        cache_key: str,
-        cache_tags: List[str],
-        userdata: Any = None,
-        call_info: Optional[CacheCallInfo] = None,
-        **kwargs,
-    ) -> None: ...
+if PROTOCOL_AVAILABLE:
+
+    class CacheHook(Protocol):
+        def __call__(
+            self,
+            cache_key: str,
+            cache_tags: List[str],
+            userdata: Any = None,
+            call_info: Optional[CacheCallInfo] = None,
+            **kwargs,
+        ) -> None: ...
+
+else:
+    CacheHook = Callable  # type: ignore
 
 
 @dataclass
