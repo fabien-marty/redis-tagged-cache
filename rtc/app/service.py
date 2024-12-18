@@ -103,8 +103,6 @@ class Service:
     namespace: str = "default"
     default_lifetime: Optional[int] = None
     lifetime_for_tags: Optional[int] = None
-    log_cache_hit: bool = True
-    log_cache_miss: bool = True
     cache_hit_hook: Optional[CacheHook] = None
     cache_miss_hook: Optional[CacheHook] = None
 
@@ -235,18 +233,10 @@ class Service:
         storage_key = self.get_storage_value_key(key, tag_names)
         res = self.storage_adapter.mget([storage_key])[0]
         if res is None:
-            if self.log_cache_miss:
-                self.logger.debug(
-                    "cache miss for key: %s and tags: %s", key, ", ".join(tag_names)
-                )
             self.safe_call_hook(
                 self.cache_miss_hook, key, tag_names, hook_userdata, call_info
             )
         else:
-            if self.log_cache_hit:
-                self.logger.debug(
-                    "cache hit for key: %s and tags: %s", key, ", ".join(tag_names)
-                )
             self.safe_call_hook(
                 self.cache_hit_hook, key, tag_names, hook_userdata, call_info
             )

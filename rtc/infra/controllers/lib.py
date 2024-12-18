@@ -55,12 +55,6 @@ class RedisTaggedCache:
     disabled: bool = False
     """If True, the cache is disabled (cache always missed and no write) but the API is still available."""
 
-    log_cache_hit: bool = True
-    """If True, log cache hits with standard logging with a debug message."""
-
-    log_cache_miss: bool = True
-    """If True, log cache miss with standard logging with a debug message."""
-
     cache_hit_hook: Optional[CacheHook] = None
     """Optional custom hook called when a cache hit occurs.
 
@@ -134,8 +128,6 @@ class RedisTaggedCache:
             namespace=self.namespace,
             default_lifetime=self.default_lifetime,
             lifetime_for_tags=self.lifetime_for_tags,
-            log_cache_hit=self.log_cache_hit,
-            log_cache_miss=self.log_cache_miss,
             cache_hit_hook=self.cache_hit_hook,
             cache_miss_hook=self.cache_miss_hook,
         )
