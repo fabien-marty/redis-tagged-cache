@@ -3,7 +3,7 @@ import pickle
 from dataclasses import dataclass, field
 from typing import Any, Callable, List, Optional, Union
 
-from rtc.app.service import CacheMiss, Service
+from rtc.app.service import CacheHook, CacheMiss, Service
 from rtc.app.storage import StoragePort
 from rtc.infra.adapters.storage.blackhole import BlackHoleStorageAdapter
 from rtc.infra.adapters.storage.redis import RedisStorageAdapter
@@ -61,7 +61,7 @@ class RedisTaggedCache:
     log_cache_miss: bool = True
     """If True, log cache miss with standard logging with a debug message."""
 
-    cache_hit_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
+    cache_hit_hook: Optional[CacheHook] = None
     """Optional custom hook called when a cache hit occurs.
 
     Note: the hook is called with the key, the list of tags and an optional userdata variable
@@ -77,7 +77,7 @@ class RedisTaggedCache:
 
     """
 
-    cache_miss_hook: Optional[Callable[[str, List[str], Optional[Any]], None]] = None
+    cache_miss_hook: Optional[CacheHook] = None
     """Optional custom hook called when a cache miss occurs.
 
     Note: the hook is called with the key, the list of tags and an optional userdata variable
@@ -254,6 +254,8 @@ class RedisTaggedCache:
         ```python
         def custom_key(*args, **kwargs) -> str:
             # {your code here to generate key}
+            # note: info about the decorated function will be added in kwargs under the key "rtc_call_info"
+            #       (type: CacheCallInfo object)
             # make your own key from *args, **kwargs that are the calling arguments of the decorated function
             return key
         ```
@@ -264,6 +266,8 @@ class RedisTaggedCache:
         ```python
         def dynamic_tags(*args, **kwargs) -> List[str]:
             # {your code here to generate tags}
+            # note: info about the decorated function will be added in kwargs under the key "rtc_call_info"
+            #       (type: CacheCallInfo object)
             # make your own tags from *args, **kwargs that are the calling arguments of the decorated function
             return tags
         ```
@@ -313,6 +317,8 @@ class RedisTaggedCache:
         ```python
         def custom_key(*args, **kwargs) -> str:
             # {your code here to generate key}
+            # note: info about the decorated method will be added in kwargs under the key "rtc_call_info"
+            #       (type: CacheCallInfo object)
             # make your own key from *args, **kwargs that are the calling arguments of the decorated method
             return key
         ```
@@ -323,6 +329,8 @@ class RedisTaggedCache:
         ```python
         def dynamic_tags(*args, **kwargs) -> List[str]:
             # {your code here to generate tags}
+            # note: info about the decorated method will be added in kwargs under the key "rtc_call_info"
+            #       (type: CacheCallInfo object)
             # make your own tags from *args, **kwargs that are the calling arguments of the decorated method
             return tags
         ```
