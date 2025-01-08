@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.8.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.8.0) (2025-01-08)
+
+#### Added
+
+- allow to override serializer per decorator call [\#38](https://github.com/fabien-marty/redis-tagged-cache/pull/38) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.7.0...v0.8.0)</sub>
+
 ## [v0.7.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.7.0) (2024-12-18)
 
 #### Added
