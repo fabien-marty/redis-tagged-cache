@@ -228,6 +228,8 @@ class RedisTaggedCache:
         lifetime: Optional[int] = None,
         key: Optional[Callable[..., str]] = None,
         hook_userdata: Optional[Any] = None,
+        serializer: Optional[Callable[[Any], Optional[bytes]]] = None,
+        unserializer: Optional[Callable[[bytes], Any]] = None,
     ):
         """Decorator for caching the result of a function.
 
@@ -235,10 +237,10 @@ class RedisTaggedCache:
 
         - for method, you should use `method_decorator` instead (because with `method_decorator` the first argument `self` is ignored in automatic key generation)
         - the result of the function must be pickleable
-
         - `tags` and `lifetime` are the same as for `set` method (but `tags` can also be a callable here to provide dynamic tags)
         - `key` is an optional function that can be used to generate a custom key
         - `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else)
+        - if `serializer` or `unserializer` are not provided, we will use the serializer/unserializer defined passed in the `RedisTaggedCache` constructor
 
         If you don't provide a `key` argument, a key is automatically generated from the function name/location and its calling arguments (they must be JSON serializable).
         You can override this behavior by providing a custom `key` function with following signature:
@@ -272,8 +274,8 @@ class RedisTaggedCache:
                 dynamic_tag_names=tags,
                 dynamic_key=key,
                 hook_userdata=hook_userdata,
-                serializer=self._serialize,
-                unserializer=self._unserialize,
+                serializer=serializer if serializer else self._serialize,
+                unserializer=unserializer if unserializer else self._unserialize,
             )
         else:
             return self._service.decorator(
@@ -291,6 +293,8 @@ class RedisTaggedCache:
         lifetime: Optional[int] = None,
         key: Optional[Callable[..., str]] = None,
         hook_userdata: Optional[Any] = None,
+        serializer: Optional[Callable[[Any], Optional[bytes]]] = None,
+        unserializer: Optional[Callable[[bytes], Any]] = None,
     ):
         """Decorator for caching the result of a method.
 
@@ -298,10 +302,10 @@ class RedisTaggedCache:
 
         - for functions, you should use `function_decorator` instead (because with `method_decorator` the first argument is ignored in automatic key generation)
         - the result of the method must be pickleable
-
         - `tags` and `lifetime` are the same as for `set` method (but `tags` can also be a callable here to provide dynamic tags)
         - `key` is an optional method that can be used to generate a custom key
         - `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else)
+        - if `serializer` or `unserializer` are not provided, we will use the serializer/unserializer defined passed in the `RedisTaggedCache` constructor
 
         If you don't provide a `key` argument, a key is automatically generated from the method name/location and its calling arguments (they must be JSON serializable).
         You can override this behavior by providing a custom `key` function with following signature:
@@ -336,8 +340,8 @@ class RedisTaggedCache:
                 dynamic_key=key,
                 ignore_first_argument=True,
                 hook_userdata=hook_userdata,
-                serializer=self._serialize,
-                unserializer=self._unserialize,
+                serializer=serializer if serializer else self._serialize,
+                unserializer=unserializer if unserializer else self._unserialize,
             )
         else:
             return self._service.decorator(
@@ -346,6 +350,6 @@ class RedisTaggedCache:
                 dynamic_key=key,
                 ignore_first_argument=True,
                 hook_userdata=hook_userdata,
-                serializer=self._serialize,
-                unserializer=self._unserialize,
+                serializer=serializer if serializer else self._serialize,
+                unserializer=unserializer if unserializer else self._unserialize,
             )
