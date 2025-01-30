@@ -12,7 +12,12 @@ from rtc.infra.adapters.storage.redis import RedisStorageAdapter
 
 @dataclass
 class RedisTaggedCache:
-    """Main class for Redis-based tagged cache."""
+    """Main class for Redis-based tagged cache.
+
+
+    Note: thread-safe.
+
+    """
 
     namespace: str = "default"
     """Namespace for the cache entries."""
@@ -56,32 +61,17 @@ class RedisTaggedCache:
     disabled: bool = False
     """If True, the cache is disabled (cache always missed and no write) but the API is still available."""
 
-    cache_hit_hook: Optional[CacheHook] = None
-    """Optional custom hook called when a cache hit occurs.
+    cache_hook: Optional[CacheHook] = None
+    """Optional custom hook called after each cache decorator usage.
 
-    Note: the hook is called with the key, the list of tags and an optional userdata variable
-    (set with `hook_userdata` parameter of `get`/decorators method).
-
-    The signature of the hook must be:
-
-    ```python
-    def your_hook(key: str, tags: List[str], userdata: Optional[Any]) -> None:
-        # {your code here}
-        return
-    ```
-
-    """
-
-    cache_miss_hook: Optional[CacheHook] = None
-    """Optional custom hook called when a cache miss occurs.
-
-    Note: the hook is called with the key, the list of tags and an optional userdata variable
-    (set with `hook_userdata` parameter of `get`/decorators method).
+    Note: the hook is called with the key, the list of tags, a CacheInfo object containing
+    interesting metrics / internal values and an optional userdata variable
+    (set with `hook_userdata` parameter of decorator methods).
 
     The signature of the hook must be:
 
     ```python
-    def your_hook(key: str, tags: List[str], userdata: Optional[Any]) -> None:
+    def your_hook(key: str, tags: List[str], cache_info: CacheInfo, userdata: Optional[Any] = None) -> None:
         # {your code here}
         return
     ```
@@ -131,8 +121,7 @@ class RedisTaggedCache:
             namespace=self.namespace,
             default_lifetime=self.default_lifetime,
             lifetime_for_tags=self.lifetime_for_tags,
-            cache_hit_hook=self.cache_hit_hook,
-            cache_miss_hook=self.cache_miss_hook,
+            cache_hook=self.cache_hook,
         )
 
     def _serialize(self, value: Any) -> Optional[bytes]:
@@ -159,19 +148,16 @@ class RedisTaggedCache:
         self,
         key: str,
         tags: Optional[List[str]] = None,
-        hook_userdata: Optional[Any] = None,
     ) -> Any:
         """Read the value for the given key (with given invalidation tags).
 
         If the key does not exist (or invalidated), None is returned.
 
-        `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else).
-
         Raised:
             CacheMiss: if the key does not exist (or expired/invalidated).
 
         """
-        tmp = self._service.get_value(key, tags or [], hook_userdata=hook_userdata)
+        tmp = self._service.get_value(key, tags or [])
         if tmp is None:
             raise CacheMiss()
         try:
@@ -246,6 +232,10 @@ class RedisTaggedCache:
         - `key` is an optional function that can be used to generate a custom key
         - `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else)
         - if `serializer` or `unserializer` are not provided, we will use the serializer/unserializer defined passed in the `RedisTaggedCache` constructor
+        - `lock` is an optional boolean to enable a lock mechanism to avoid cache stampede (default to False), there is some overhead but can
+        be interesting for slow functions
+        - `lock_timeout` is an optional integer to set the lock timeout in seconds (default to 5), should be greater that the time
+        needed to call the decorated function
 
         If you don't provide a `key` argument, a key is automatically generated from the function name/location and its calling arguments (they must be JSON serializable).
         You can override this behavior by providing a custom `key` function with following signature:
@@ -253,9 +243,7 @@ class RedisTaggedCache:
         ```python
         def custom_key(*args, **kwargs) -> str:
             # {your code here to generate key}
-            # note: info about the decorated function will be added in kwargs under the key "rtc_call_info"
-            #       (type: CacheCallInfo object)
-            # make your own key from *args, **kwargs that are the calling arguments of the decorated function
+            # make your own key from *args, **kwargs that are exactly the calling arguments of the decorated function
             return key
         ```
 
@@ -265,9 +253,7 @@ class RedisTaggedCache:
         ```python
         def dynamic_tags(*args, **kwargs) -> List[str]:
             # {your code here to generate tags}
-            # note: info about the decorated function will be added in kwargs under the key "rtc_call_info"
-            #       (type: CacheCallInfo object)
-            # make your own tags from *args, **kwargs that are the calling arguments of the decorated function
+            # make your own tags from *args, **kwargs that are exactly the calling arguments of the decorated function
             return tags
         ```
 
@@ -290,8 +276,8 @@ class RedisTaggedCache:
                 lifetime=lifetime,
                 dynamic_key=key,
                 hook_userdata=hook_userdata,
-                serializer=self._serialize,
-                unserializer=self._unserialize,
+                serializer=serializer if serializer else self._serialize,
+                unserializer=unserializer if unserializer else self._unserialize,
                 lock=lock,
                 lock_timeout=lock_timeout,
             )
@@ -317,6 +303,10 @@ class RedisTaggedCache:
         - `key` is an optional method that can be used to generate a custom key
         - `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else)
         - if `serializer` or `unserializer` are not provided, we will use the serializer/unserializer defined passed in the `RedisTaggedCache` constructor
+        - `lock` is an optional boolean to enable a lock mechanism to avoid cache stampede (default to False), there is some overhead but can
+        be interesting for slow functions
+        - `lock_timeout` is an optional integer to set the lock timeout in seconds (default to 5), should be greater that the time
+        needed to call the decorated function
 
         If you don't provide a `key` argument, a key is automatically generated from the method name/location and its calling arguments (they must be JSON serializable).
         You can override this behavior by providing a custom `key` function with following signature:
@@ -324,9 +314,7 @@ class RedisTaggedCache:
         ```python
         def custom_key(*args, **kwargs) -> str:
             # {your code here to generate key}
-            # note: info about the decorated method will be added in kwargs under the key "rtc_call_info"
-            #       (type: CacheCallInfo object)
-            # make your own key from *args, **kwargs that are the calling arguments of the decorated method
+            # make your own key from *args, **kwargs that are exactly the calling arguments of the decorated method (including self)
             return key
         ```
 
@@ -336,10 +324,9 @@ class RedisTaggedCache:
         ```python
         def dynamic_tags(*args, **kwargs) -> List[str]:
             # {your code here to generate tags}
-            # note: info about the decorated method will be added in kwargs under the key "rtc_call_info"
-            #       (type: CacheCallInfo object)
-            # make your own tags from *args, **kwargs that are the calling arguments of the decorated method
+            # make your own tags from *args, **kwargs that are exactly the calling arguments of the decorated method (including self)
             return tags
+
         ```
 
         """
