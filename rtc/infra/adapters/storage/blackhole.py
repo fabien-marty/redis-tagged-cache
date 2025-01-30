@@ -1,3 +1,4 @@
+import uuid
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -25,3 +26,11 @@ class BlackHoleStorageAdapter(StoragePort):
 
     def mget(self, storage_keys: List[str]) -> List[Optional[bytes]]:
         return [None] * len(storage_keys)
+
+    def lock(
+        self, storage_key: str, timeout: int = 5, waiting: int = 1
+    ) -> Optional[str]:
+        return str(uuid.uuid4())
+
+    def unlock(self, storage_key: str, lock_identifier: str) -> None:
+        pass
