@@ -1,6 +1,7 @@
 import logging
 import pickle
 from dataclasses import dataclass, field
+from threading import Lock
 from typing import Any, Callable, List, Optional, Union
 
 from rtc.app.service import CacheHook, CacheMiss, Service
@@ -93,6 +94,7 @@ class RedisTaggedCache:
     unserializer: Callable[[bytes], Any] = pickle.loads
     """Unserializer function to unserialize data after reading it from the cache."""
 
+    _internal_lock: Lock = field(init=False, default_factory=Lock)
     _forced_adapter: Optional[StoragePort] = field(
         init=False, default=None
     )  # for unit-testing only
@@ -102,9 +104,10 @@ class RedisTaggedCache:
 
     @property
     def _service(self) -> Service:
-        if self.__service is None:
-            self.__service = self._make_service()
-        return self.__service
+        with self._internal_lock:
+            if self.__service is None:
+                self.__service = self._make_service()
+            return self.__service
 
     def _make_service(self) -> Service:
         adapter: StoragePort
@@ -228,6 +231,8 @@ class RedisTaggedCache:
         lifetime: Optional[int] = None,
         key: Optional[Callable[..., str]] = None,
         hook_userdata: Optional[Any] = None,
+        lock: bool = False,
+        lock_timeout: int = 5,
         serializer: Optional[Callable[[Any], Optional[bytes]]] = None,
         unserializer: Optional[Callable[[bytes], Any]] = None,
     ):
@@ -276,6 +281,8 @@ class RedisTaggedCache:
                 hook_userdata=hook_userdata,
                 serializer=serializer if serializer else self._serialize,
                 unserializer=unserializer if unserializer else self._unserialize,
+                lock=lock,
+                lock_timeout=lock_timeout,
             )
         else:
             return self._service.decorator(
@@ -285,6 +292,8 @@ class RedisTaggedCache:
                 hook_userdata=hook_userdata,
                 serializer=self._serialize,
                 unserializer=self._unserialize,
+                lock=lock,
+                lock_timeout=lock_timeout,
             )
 
     def method_decorator(
@@ -293,6 +302,8 @@ class RedisTaggedCache:
         lifetime: Optional[int] = None,
         key: Optional[Callable[..., str]] = None,
         hook_userdata: Optional[Any] = None,
+        lock: bool = False,
+        lock_timeout: int = 5,
         serializer: Optional[Callable[[Any], Optional[bytes]]] = None,
         unserializer: Optional[Callable[[bytes], Any]] = None,
     ):
@@ -342,6 +353,8 @@ class RedisTaggedCache:
                 hook_userdata=hook_userdata,
                 serializer=serializer if serializer else self._serialize,
                 unserializer=unserializer if unserializer else self._unserialize,
+                lock=lock,
+                lock_timeout=lock_timeout,
             )
         else:
             return self._service.decorator(
@@ -352,4 +365,6 @@ class RedisTaggedCache:
                 hook_userdata=hook_userdata,
                 serializer=serializer if serializer else self._serialize,
                 unserializer=unserializer if unserializer else self._unserialize,
+                lock=lock,
+                lock_timeout=lock_timeout,
             )

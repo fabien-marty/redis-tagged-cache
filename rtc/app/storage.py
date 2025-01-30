@@ -49,3 +49,28 @@ class StoragePort(ABC):
 
         """
         return self.mdelete([storage_keys])
+
+    @abstractmethod
+    def lock(
+        self, storage_key: str, timeout: int = 5, waiting: int = 1
+    ) -> Optional[str]:
+        """Lock the entry under the given key.
+
+        The lock is live until unlock() call or the lock is expired (after timeout seconds).
+
+        This call is blocking (up to waiting seconds) until the lock is acquired.
+
+        If None is returned, the lock could not be acquired in the waiting delay.
+        Otherwise, the lock is acquired and a unique lock identifier is returned.
+
+        """
+        pass
+
+    @abstractmethod
+    def unlock(self, storage_key: str, lock_identifier: str) -> None:
+        """Unlock the entry under the given key.
+
+        The lock_identifier is the one returned by the lock method.
+
+        """
+        pass

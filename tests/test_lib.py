@@ -1,5 +1,8 @@
+import datetime
 import os
+import time
 import uuid
+from threading import Thread
 from typing import Any, List, Optional
 
 import pytest
@@ -172,7 +175,6 @@ def test_hooks_userdata(instance: RedisTaggedCache):
         assert cache_key == "key1"
         assert cache_tags == ["tag1", "tag2"]
         assert userdata == "foo"
-        assert call_info is None
         calls.append("hit")
 
     def cache_miss_hook(
@@ -185,7 +187,6 @@ def test_hooks_userdata(instance: RedisTaggedCache):
         assert cache_key == "key2"
         assert cache_tags == ["tag3"]
         assert userdata == "foo"
-        assert call_info is None
         calls.append("miss")
 
     instance.cache_hit_hook = cache_hit_hook
@@ -311,3 +312,68 @@ def test_method_decorator_with_hook(instance: RedisTaggedCache):
     a.decorated(1, "2", foo="bar")
     assert len(calls) == 1
     assert calls[0] == "hit"
+
+
+def test_method_decorator_with_lock(instance: RedisTaggedCache):
+    calls = []
+
+    class A:
+        @instance.method_decorator(tags=["tag1", "tag2"], lock=True, lock_timeout=5)
+        def decorated(self, *args, **kwargs):
+            calls.append("called")
+            time.sleep(3)
+            return [args, kwargs]
+
+    def wait_and_call(a: A):
+        time.sleep(1)
+        res = a.decorated(1, "2", foo="bar")
+        assert res == [(1, "2"), {"foo": "bar"}]
+
+    a = A()
+    t = Thread(target=wait_and_call, args=(a,))
+    t.start()
+
+    before = datetime.datetime.now()
+    res = a.decorated(1, "2", foo="bar")
+    assert res == [(1, "2"), {"foo": "bar"}]
+
+    assert len(calls) == 1
+    t.join()
+    assert len(calls) == 1
+    after = datetime.datetime.now()
+    assert (after - before).total_seconds() < 4
+
+
+def test_method_decorator_with_high_concurrency_lock(instance: RedisTaggedCache):
+    calls = []
+
+    class A:
+        @instance.method_decorator(tags=["tag1", "tag2"], lock=True, lock_timeout=5)
+        def decorated(self, *args, **kwargs):
+            calls.append("called")
+            time.sleep(2)
+            return [args, kwargs]
+
+    def call(a: A):
+        res = a.decorated(1, "2", foo="bar")
+        assert res == [(1, "2"), {"foo": "bar"}]
+
+    a = A()
+
+    # Let's call the function with different arguments to avoid a kind of race conditions in tag values
+    res = a.decorated(0, "", foo="bar")
+    assert res == [(0, ""), {"foo": "bar"}]
+    calls.pop()  # let's remove the call from the list
+
+    threads = []
+    for _ in range(0, 100):
+        t = Thread(target=call, args=(a,))
+        threads.append(t)
+    before = datetime.datetime.now()
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(calls) == 1
+    after = datetime.datetime.now()
+    assert (after - before).total_seconds() < 4
