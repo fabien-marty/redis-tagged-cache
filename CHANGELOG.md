@@ -1,5 +1,14 @@
 # CHANGELOG
 
+## [v0.9.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.9.0) (2025-01-30)
+
+#### Added
+
+- Dogpile effect lock option [\#37](https://github.com/fabien-marty/redis-tagged-cache/pull/37) ([fabien-marty](https://github.com/fabien-marty))
+- [breaking change] Hooks and dynamic keys/tags refactoring [\#40](https://github.com/fabien-marty/redis-tagged-cache/pull/40) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.8.0...v0.9.0)</sub>
+
 ## [v0.8.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.8.0) (2025-01-08)
 
 #### Added
