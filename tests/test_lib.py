@@ -3,11 +3,11 @@ import os
 import time
 import uuid
 from threading import Thread
-from typing import Any, List, Optional
+from typing import List
 
 import pytest
 
-from rtc.app.service import CacheCallInfo
+from rtc.app.service import CacheInfo
 from rtc.infra.adapters.storage.dict import DictStorageAdapter
 from rtc.infra.controllers.lib import CacheMiss, RedisTaggedCache
 
@@ -125,97 +125,13 @@ def test_invalidate_all(instance: RedisTaggedCache):
         instance.get("key", [])
 
 
-def test_hooks(instance: RedisTaggedCache):
-    calls = []
-
-    def cache_hit_hook(
-        cache_key: str,
-        cache_tags: List[str],
-        userdata=None,
-        call_info: Optional[CacheCallInfo] = None,
-        **kwargs,
-    ):
-        assert cache_key == "key1"
-        assert cache_tags == ["tag1", "tag2"]
-        assert userdata is None
-        calls.append("hit")
-
-    def cache_miss_hook(
-        cache_key: str,
-        cache_tags: List[str],
-        userdata: Any = None,
-        call_info: Optional[CacheCallInfo] = None,
-        **kwargs,
-    ):
-        assert cache_key == "key2"
-        assert cache_tags == ["tag3"]
-        assert userdata is None
-        calls.append("miss")
-
-    instance.cache_hit_hook = cache_hit_hook
-    instance.cache_miss_hook = cache_miss_hook
-    instance.set("key1", b"value1", ["tag1", "tag2"])
-    assert instance.get("key1", ["tag1", "tag2"]) == b"value1"
-    assert calls == ["hit"]
-    with pytest.raises(CacheMiss):
-        instance.get("key2", ["tag3"])
-    assert calls == ["hit", "miss"]
-
-
-def test_hooks_userdata(instance: RedisTaggedCache):
-    calls = []
-
-    def cache_hit_hook(
-        cache_key: str,
-        cache_tags: List[str],
-        userdata=None,
-        call_info: Optional[CacheCallInfo] = None,
-        **kwargs,
-    ):
-        assert cache_key == "key1"
-        assert cache_tags == ["tag1", "tag2"]
-        assert userdata == "foo"
-        calls.append("hit")
-
-    def cache_miss_hook(
-        cache_key: str,
-        cache_tags: List[str],
-        userdata: Any = None,
-        call_info: Optional[CacheCallInfo] = None,
-        **kwargs,
-    ):
-        assert cache_key == "key2"
-        assert cache_tags == ["tag3"]
-        assert userdata == "foo"
-        calls.append("miss")
-
-    instance.cache_hit_hook = cache_hit_hook
-    instance.cache_miss_hook = cache_miss_hook
-    instance.set("key1", b"value1", ["tag1", "tag2"])
-    assert instance.get("key1", ["tag1", "tag2"], hook_userdata="foo") == b"value1"
-    assert calls == ["hit"]
-    with pytest.raises(CacheMiss):
-        instance.get("key2", ["tag3"], hook_userdata="foo")
-    assert calls == ["hit", "miss"]
-
-
 def dynamic_tags(self, *args, **kwargs) -> List[str]:
-    rtc_call_info = kwargs.get("rtc_call_info")
-    assert rtc_call_info is not None
     assert args == (1, "2")
-    assert rtc_call_info.filepath == __file__
-    assert rtc_call_info.class_name == "A"
-    assert rtc_call_info.function_name == "decorated"
     return ["tag1", "tag2", "tag3"]
 
 
 def dynamic_key(self, *args, **kwargs) -> str:
-    rtc_call_info = kwargs.get("rtc_call_info")
-    assert rtc_call_info is not None
     assert args == (1, "2")
-    assert rtc_call_info.filepath == __file__
-    assert rtc_call_info.class_name == "A"
-    assert rtc_call_info.function_name == "decorated"
     return "fookey"
 
 
@@ -257,21 +173,22 @@ def test_dynamic_key(instance: RedisTaggedCache):
 def test_function_decorator_with_hook(instance: RedisTaggedCache):
     calls = []
 
-    def cache_hit_hook(
+    def cache_hook(
         cache_key: str,
         cache_tags: List[str],
+        cache_info: CacheInfo,
         userdata=None,
-        call_info: Optional[CacheCallInfo] = None,
         **kwargs,
     ):
-        assert userdata == "foo"
-        assert call_info is not None
-        assert call_info.filepath == __file__
-        assert call_info.class_name == ""
-        assert call_info.function_name == "decorated"
-        calls.append("hit")
+        if cache_info.hit:
+            assert userdata == "foo"
+            assert cache_info is not None
+            assert cache_info.filepath == __file__
+            assert cache_info.class_name == ""
+            assert cache_info.function_name == "decorated"
+            calls.append("hit")
 
-    instance.cache_hit_hook = cache_hit_hook
+    instance.cache_hook = cache_hook
 
     @instance.function_decorator(tags=["tag1", "tag2"], hook_userdata="foo")
     def decorated(*args, **kwargs):
@@ -286,21 +203,22 @@ def test_function_decorator_with_hook(instance: RedisTaggedCache):
 def test_method_decorator_with_hook(instance: RedisTaggedCache):
     calls = []
 
-    def cache_hit_hook(
+    def cache_hook(
         cache_key: str,
         cache_tags: List[str],
+        cache_info: CacheInfo,
         userdata=None,
-        call_info: Optional[CacheCallInfo] = None,
         **kwargs,
     ):
-        assert userdata == "foo"
-        assert call_info is not None
-        assert call_info.filepath == __file__
-        assert call_info.class_name == "A"
-        assert call_info.function_name == "decorated"
-        calls.append("hit")
+        if cache_info.hit:
+            assert userdata == "foo"
+            assert cache_info is not None
+            assert cache_info.filepath == __file__
+            assert cache_info.class_name == "A"
+            assert cache_info.function_name == "decorated"
+            calls.append("hit")
 
-    instance.cache_hit_hook = cache_hit_hook
+    instance.cache_hook = cache_hook
 
     class A:
         @instance.method_decorator(tags=["tag1", "tag2"], hook_userdata="foo")

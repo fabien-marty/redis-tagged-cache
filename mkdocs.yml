@@ -13,6 +13,7 @@ plugins:
         options:
           show_symbol_type_heading: true
           show_symbol_type_toc: true
+          show_signature_annotations: true
           parameter_headings: false
 
 

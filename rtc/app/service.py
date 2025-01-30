@@ -7,7 +7,7 @@ import pickle
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from rtc.app.storage import StoragePort
 
@@ -62,7 +62,7 @@ class CacheMiss(Exception):
 
 
 @dataclass
-class CacheCallInfo:
+class CacheInfo:
     """Class containing location infos about the cache call.
 
     This is only used in cache hit/miss hooks.
@@ -70,16 +70,28 @@ class CacheCallInfo:
     """
 
     filepath: str = ""
-    """File path of the decorated function (only available when used with cache decorators)."""
+    """File path of the decorated function."""
 
     class_name: str = ""
-    """Class name (empty for functions) of the decorated function (only available when used with cache decorators)."""
+    """Class name (empty for functions) of the decorated function."""
 
     function_name: str = ""
-    """Function name of the decorated function/method (only available when used with cache decorators)."""
+    """Function name of the decorated function/method."""
+
+    function_args: Tuple[Any, ...] = field(default_factory=tuple)
+    """Decorated function/method arguments (including self as first argument for methods) (*args)."""
+
+    function_kwargs: Dict[str, Any] = field(default_factory=dict)
+    """Decorated function/method keyword arguments (**kwargs)."""
+
+    method_decorator: bool = False
+    """If True, this comes from a method_decorator. Else from a function_decorator."""
 
     hit: bool = False
     """Cache hit (the value was found in the cache)."""
+
+    elapsed: float = 0.0
+    """Total elapsed time (in seconds). It includes the decorated function call in case of cache miss."""
 
     lock_waiting_ms: int = 0
     """Lock waiting time (in ms), only when used with cache decorators and lock=True."""
@@ -115,10 +127,12 @@ if PROTOCOL_AVAILABLE:
             self,
             cache_key: str,
             cache_tags: List[str],
+            cache_info: CacheInfo,
             userdata: Any = None,
-            call_info: Optional[CacheCallInfo] = None,
-            **kwargs,
-        ) -> None: ...
+        ) -> None:
+            """Signature of cache hooks."""
+            pass
+
 
 else:
     CacheHook = Callable  # type: ignore
@@ -130,8 +144,7 @@ class Service:
     namespace: str = "default"
     default_lifetime: Optional[int] = None
     lifetime_for_tags: Optional[int] = None
-    cache_hit_hook: Optional[CacheHook] = None
-    cache_miss_hook: Optional[CacheHook] = None
+    cache_hook: Optional[CacheHook] = None
 
     namespace_hash: str = field(init=False, default="")
     logger: logging.Logger = field(default_factory=get_logger)
@@ -141,23 +154,26 @@ class Service:
 
     def safe_call_hook(
         self,
-        hook: Optional[CacheHook],
+        perf_counter: float,
         str,
         tag_names: List[str],
+        cache_info: CacheInfo,
         userdata: Optional[Any] = None,
-        call_info: Optional[CacheCallInfo] = None,
     ) -> None:
         """Call the given hook with the given arguments.
 
         If an exception is raised, it is caught and logged. If the hook is None, nothing is done.
 
         """
-        if not hook:
+        if not self.cache_hook:
             return
+        cache_info.elapsed = time.perf_counter() - perf_counter
         try:
-            hook(str, tag_names, userdata=userdata, call_info=call_info)
+            self.cache_hook(str, tag_names, userdata=userdata, cache_info=cache_info)
         except Exception:
-            self.logger.warning(f"Error while calling hook {hook}", exc_info=True)
+            self.logger.warning(
+                f"Error while calling hook {self.cache_hook}", exc_info=True
+            )
 
     def resolve_lifetime(self, lifetime: Optional[int]) -> Optional[int]:
         """Resolve the given lifetime with the default value.
@@ -245,36 +261,10 @@ class Service:
         )
         self.storage_adapter.set(storage_key, value, lifetime=resolved_lifetime)
 
-    def _call_hooks(
-        self,
-        hit: bool,
-        key: str,
-        tag_names: List[str],
-        hook_userdata: Any,
-        call_info: Optional[CacheCallInfo],
-        **kwargs,
-    ) -> None:
-        if call_info is None:
-            call_info = CacheCallInfo()
-        call_info.hit = hit
-        for k, v in kwargs.items():
-            setattr(call_info, k, v)
-        if hit:
-            self.safe_call_hook(
-                self.cache_hit_hook, key, tag_names, hook_userdata, call_info
-            )
-        else:
-            self.safe_call_hook(
-                self.cache_miss_hook, key, tag_names, hook_userdata, call_info
-            )
-
     def _get_value(
         self,
         key: str,
         tag_names: List[str],
-        hook_userdata: Optional[Any] = None,
-        call_info: Optional[CacheCallInfo] = None,
-        call_hooks: bool = True,
     ) -> Tuple[Optional[bytes], str]:
         """Read the value for the given key (with given invalidation tags).
 
@@ -285,16 +275,12 @@ class Service:
         """
         storage_key = self.get_storage_value_key(key, tag_names)
         res = self.storage_adapter.mget([storage_key])[0]
-        if call_hooks:
-            self._call_hooks(res is not None, key, tag_names, hook_userdata, call_info)
         return res, storage_key
 
     def get_value_or_lock_id(
         self,
         key: str,
         tag_names: List[str],
-        hook_userdata: Optional[Any] = None,
-        call_info: Optional[CacheCallInfo] = None,
         lock_timeout: int = 5,
     ) -> GetOrLockResult:
         """Read the value for the given key (with given invalidation tags).
@@ -307,12 +293,9 @@ class Service:
 
         """
         # first try without lock
-        res, storage_key = self._get_value(key, tag_names, call_hooks=False)
+        res, storage_key = self._get_value(key, tag_names)
         if res is not None:
             # cache hit
-            self._call_hooks(
-                True, key, tag_names, hook_userdata, call_info, lock_full_hit=True
-            )
             return GetOrLockResult(value=res, storage_key=storage_key, full_hit=True)
         # cache miss => let's lock
         before = time.perf_counter()
@@ -323,17 +306,9 @@ class Service:
             waiting_ms = int((time.perf_counter() - before) * 1000)
             try:
                 # retry: maybe we have the value now?
-                res, storage_key = self._get_value(key, tag_names, call_hooks=False)
+                res, storage_key = self._get_value(key, tag_names)
                 if res is not None:
                     # cache hit
-                    self._call_hooks(
-                        True,
-                        key,
-                        tag_names,
-                        hook_userdata,
-                        call_info,
-                        lock_waiting_ms=waiting_ms,
-                    )
                     return GetOrLockResult(
                         value=res,
                         storage_key=storage_key,
@@ -346,15 +321,6 @@ class Service:
             if lock_id or waiting_ms > 1000 * lock_timeout:
                 break
         # cache miss (again)
-        self._call_hooks(
-            False,
-            key,
-            tag_names,
-            hook_userdata,
-            call_info,
-            lock_full_miss=True,
-            lock_waiting_ms=waiting_ms,
-        )
         return GetOrLockResult(
             waiting_ms=waiting_ms,
             full_miss=True,
@@ -366,15 +332,13 @@ class Service:
         self,
         key: str,
         tag_names: List[str],
-        hook_userdata: Optional[Any] = None,
-        call_info: Optional[CacheCallInfo] = None,
     ) -> Optional[bytes]:
         """Read the value for the given key (with given invalidation tags).
 
         If the key does not exist (or invalidated), None is returned.
 
         """
-        res, _ = self._get_value(key, tag_names, hook_userdata, call_info)
+        res, _ = self._get_value(key, tag_names)
         return res
 
     def delete_value(self, key: str, tag_names: List[str]) -> None:
@@ -404,6 +368,7 @@ class Service:
     ):
         def inner_decorator(f: Any):
             def wrapped(*args: Any, **kwargs: Any):
+                before = time.perf_counter()
                 key: str = ""
                 args_index: int = 0
                 class_name: str = ""
@@ -413,19 +378,17 @@ class Service:
                         class_name = args[0].__class__.__name__
                     except Exception:
                         pass
-                call_info = CacheCallInfo(
+                cache_info = CacheInfo(
                     filepath=inspect.getfile(f),
                     class_name=class_name,
                     function_name=f.__name__,
+                    function_args=args,
+                    function_kwargs=kwargs,
+                    method_decorator=ignore_first_argument,
                 )
                 if dynamic_key is not None:
                     try:
-                        if "rtc_call_info" in kwargs:
-                            key = dynamic_key(*args, **kwargs)
-                        else:
-                            key = dynamic_key(
-                                *args, **{**kwargs, "rtc_call_info": call_info}
-                            )
+                        key = dynamic_key(*args, **kwargs)
                     except Exception:
                         logging.warning(
                             "error while computing dynamic key => cache bypassed",
@@ -435,7 +398,7 @@ class Service:
                     try:
                         serialized_args = json.dumps(
                             [
-                                call_info._dump(),
+                                cache_info._dump(),
                                 args[args_index:],
                                 kwargs,
                             ],
@@ -450,14 +413,9 @@ class Service:
                 if key:
                     if dynamic_tag_names:
                         try:
-                            if "rtc_call_info" in kwargs:
-                                full_tag_names = tag_names + dynamic_tag_names(
-                                    *args, **kwargs
-                                )
-                            else:
-                                full_tag_names = tag_names + dynamic_tag_names(
-                                    *args, **{**kwargs, "rtc_call_info": call_info}
-                                )
+                            full_tag_names = tag_names + dynamic_tag_names(
+                                *args, **kwargs
+                            )
                         except Exception:
                             logging.warning(
                                 "error while computing dynamic tag names => cache bypassed",
@@ -474,25 +432,30 @@ class Service:
                         get_or_lock_result = self.get_value_or_lock_id(
                             key,
                             full_tag_names,
-                            hook_userdata=hook_userdata,
-                            call_info=call_info,
                             lock_timeout=lock_timeout,
                         )
                         serialized_res = get_or_lock_result.value
                         lock_id = get_or_lock_result.lock_id
                         storage_key = get_or_lock_result.storage_key
+                        cache_info.lock_full_hit = get_or_lock_result.full_hit
+                        cache_info.lock_full_miss = get_or_lock_result.full_miss
+                        cache_info.lock_waiting_ms = get_or_lock_result.waiting_ms
                     else:
                         serialized_res = self.get_value(
                             key,
                             full_tag_names,
-                            hook_userdata=hook_userdata,
-                            call_info=call_info,
                         )
                     if serialized_res is not None:
                         # cache hit!
+                        cache_info.hit = True
                         try:
-                            return unserializer(serialized_res)
+                            unserialized = unserializer(serialized_res)
+                            self.safe_call_hook(
+                                before, key, full_tag_names, cache_info, hook_userdata
+                            )
+                            return unserialized
                         except Exception:
+                            cache_info.hit = False
                             logging.warning(
                                 "error while unserializing cache value => cache bypassed",
                                 exc_info=True,
@@ -509,6 +472,9 @@ class Service:
                         )
                 if lock_id and storage_key:
                     self.storage_adapter.unlock(storage_key, lock_id)
+                self.safe_call_hook(
+                    before, key, full_tag_names, cache_info, hook_userdata
+                )
                 return res
 
             return wrapped
