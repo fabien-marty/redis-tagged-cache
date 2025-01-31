@@ -353,6 +353,60 @@ class Service:
         )
         self.storage_adapter.delete(storage_key)
 
+    def _decorator_get_key(
+        self,
+        cache_info: CacheInfo,
+        dynamic_key: Optional[Callable[..., str]],
+        decorated_args_index: int,
+        *decorated_args,
+        **decorated_kwargs,
+    ) -> Optional[str]:
+        if dynamic_key is not None:
+            try:
+                return dynamic_key(*decorated_args, **decorated_kwargs)
+            except Exception:
+                logging.warning(
+                    "error while computing dynamic key => cache bypassed",
+                    exc_info=True,
+                )
+            return None
+        try:
+            serialized_args = json.dumps(
+                [
+                    cache_info._dump(),
+                    decorated_args[decorated_args_index:],
+                    decorated_kwargs,
+                ],
+                sort_keys=True,
+            ).encode("utf-8")
+            return _sha256_text_hash(serialized_args)
+        except Exception:
+            logging.warning(
+                "arguments are not JSON serializable => cache bypassed",
+                exc_info=True,
+            )
+            return None
+
+    def _decorator_get_full_tag_names(
+        self,
+        tag_names: List[str],
+        dynamic_tag_names: Optional[Callable[..., List[str]]],
+        *decorated_args,
+        **decorated_kwargs,
+    ) -> Optional[List[str]]:
+        if dynamic_tag_names:
+            try:
+                return tag_names + dynamic_tag_names(
+                    *decorated_args, **decorated_kwargs
+                )
+            except Exception:
+                logging.warning(
+                    "error while computing dynamic tag names => cache bypassed",
+                    exc_info=True,
+                )
+                return None
+        return tag_names
+
     def decorator(
         self,
         tag_names: List[str],
@@ -369,7 +423,6 @@ class Service:
         def inner_decorator(f: Any):
             def wrapped(*args: Any, **kwargs: Any):
                 before = time.perf_counter()
-                key: str = ""
                 args_index: int = 0
                 class_name: str = ""
                 if ignore_first_argument and len(args) > 0:
@@ -386,47 +439,19 @@ class Service:
                     function_kwargs=kwargs,
                     method_decorator=ignore_first_argument,
                 )
-                if dynamic_key is not None:
-                    try:
-                        key = dynamic_key(*args, **kwargs)
-                    except Exception:
-                        logging.warning(
-                            "error while computing dynamic key => cache bypassed",
-                            exc_info=True,
-                        )
-                else:
-                    try:
-                        serialized_args = json.dumps(
-                            [
-                                cache_info._dump(),
-                                args[args_index:],
-                                kwargs,
-                            ],
-                            sort_keys=True,
-                        ).encode("utf-8")
-                        key = _sha256_text_hash(serialized_args)
-                    except Exception:
-                        logging.warning(
-                            "arguments are not JSON serializable => cache bypassed",
-                            exc_info=True,
-                        )
-                if key:
-                    if dynamic_tag_names:
-                        try:
-                            full_tag_names = tag_names + dynamic_tag_names(
-                                *args, **kwargs
-                            )
-                        except Exception:
-                            logging.warning(
-                                "error while computing dynamic tag names => cache bypassed",
-                                exc_info=True,
-                            )
-                            key = ""
-                    else:
-                        full_tag_names = tag_names
+                key = self._decorator_get_key(
+                    cache_info,
+                    dynamic_key,
+                    args_index,
+                    *args,
+                    **kwargs,
+                )
+                full_tag_names = self._decorator_get_full_tag_names(
+                    tag_names, dynamic_tag_names, *args, **kwargs
+                )
                 lock_id: Optional[str] = None
                 storage_key: Optional[str] = None
-                if key:
+                if key is not None and full_tag_names is not None:
                     serialized_res: Optional[bytes]
                     if lock:
                         get_or_lock_result = self.get_value_or_lock_id(
@@ -447,15 +472,14 @@ class Service:
                         )
                     if serialized_res is not None:
                         # cache hit!
-                        cache_info.hit = True
                         try:
                             unserialized = unserializer(serialized_res)
+                            cache_info.hit = True
                             self.safe_call_hook(
                                 before, key, full_tag_names, cache_info, hook_userdata
                             )
                             return unserialized
                         except Exception:
-                            cache_info.hit = False
                             logging.warning(
                                 "error while unserializing cache value => cache bypassed",
                                 exc_info=True,
@@ -463,8 +487,9 @@ class Service:
                         finally:
                             if lock_id and storage_key:
                                 self.storage_adapter.unlock(storage_key, lock_id)
+                # cache miss => let's call the decorated function
                 res = f(*args, **kwargs)
-                if key:
+                if key is not None and full_tag_names is not None:
                     serialized = serializer(res)
                     if serialized is not None:
                         self.set_value(
@@ -473,7 +498,11 @@ class Service:
                 if lock_id and storage_key:
                     self.storage_adapter.unlock(storage_key, lock_id)
                 self.safe_call_hook(
-                    before, key, full_tag_names, cache_info, hook_userdata
+                    before,
+                    key,
+                    full_tag_names if full_tag_names else [],
+                    cache_info,
+                    hook_userdata,
                 )
                 return res
 
