@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.9.1](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.9.1) (2025-01-31)
+
+#### Fixed
+
+- remove useless import [\#42](https://github.com/fabien-marty/redis-tagged-cache/pull/42) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.9.0...v0.9.1)</sub>
+
 ## [v0.9.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.9.0) (2025-01-30)
 
 #### Added
