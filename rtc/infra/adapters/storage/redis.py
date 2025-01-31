@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import redis
-import redis.commands
 
 from rtc.app.storage import StoragePort
 
