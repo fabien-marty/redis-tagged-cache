@@ -274,7 +274,7 @@ class Service:
 
         """
         storage_key = self.get_storage_value_key(key, tag_names)
-        res = self.storage_adapter.mget([storage_key])[0]
+        res = self.storage_adapter.get(storage_key)
         return res, storage_key
 
     def get_value_or_lock_id(

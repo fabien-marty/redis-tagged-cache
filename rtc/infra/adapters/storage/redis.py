@@ -56,6 +56,13 @@ class RedisStorageAdapter(StoragePort):
         except Exception:
             logging.warning("Failed to delete values in Redis", exc_info=True)
 
+    def get(self, storage_key: str) -> Optional[bytes]:
+        try:
+            return self.redis_client.get(storage_key)  # type: ignore
+        except Exception:
+            logging.warning("Failed to get a value in Redis", exc_info=True)
+            return None
+
     def mget(self, storage_keys: List[str]) -> List[Optional[bytes]]:
         try:
             return self.redis_client.mget(storage_keys)  # type: ignore
