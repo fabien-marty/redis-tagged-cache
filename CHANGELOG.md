@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.9.3](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.9.3) (2025-02-06)
+
+#### Changed
+
+- use redis GET command for single key retrieval [\#46](https://github.com/fabien-marty/redis-tagged-cache/pull/46) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.9.2...v0.9.3)</sub>
+
 ## [v0.9.2](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.9.2) (2025-01-31)
 
 #### Fixed
