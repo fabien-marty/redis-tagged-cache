@@ -180,13 +180,17 @@ def test_function_decorator_with_hook(instance: RedisTaggedCache):
         userdata=None,
         **kwargs,
     ):
+        assert cache_info.elapsed > 0.0
+        assert userdata == "foo"
+        assert cache_info is not None
+        assert cache_info.filepath == __file__
+        assert cache_info.class_name == ""
+        assert cache_info.function_name == "decorated"
         if cache_info.hit:
-            assert userdata == "foo"
-            assert cache_info is not None
-            assert cache_info.filepath == __file__
-            assert cache_info.class_name == ""
-            assert cache_info.function_name == "decorated"
+            assert cache_info.decorated_elapsed == 0.0
             calls.append("hit")
+        else:
+            assert cache_info.decorated_elapsed > 0.0
 
     instance.cache_hook = cache_hook
 
@@ -210,13 +214,17 @@ def test_method_decorator_with_hook(instance: RedisTaggedCache):
         userdata=None,
         **kwargs,
     ):
+        assert cache_info.elapsed > 0.0
+        assert userdata == "foo"
+        assert cache_info is not None
+        assert cache_info.filepath == __file__
+        assert cache_info.class_name == "A"
+        assert cache_info.function_name == "decorated"
         if cache_info.hit:
-            assert userdata == "foo"
-            assert cache_info is not None
-            assert cache_info.filepath == __file__
-            assert cache_info.class_name == "A"
-            assert cache_info.function_name == "decorated"
+            assert cache_info.decorated_elapsed == 0.0
             calls.append("hit")
+        else:
+            assert cache_info.decorated_elapsed > 0.0
 
     instance.cache_hook = cache_hook
 
