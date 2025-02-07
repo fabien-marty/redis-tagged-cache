@@ -91,7 +91,10 @@ class CacheInfo:
     """Cache hit (the value was found in the cache)."""
 
     elapsed: float = 0.0
-    """Total elapsed time (in seconds). It includes the decorated function call in case of cache miss."""
+    """Total elapsed time (in seconds). It includes the decorated function call in case of cache miss but excludes hooks."""
+
+    decorated_elapsed: float = 0.0
+    """Elapsed time of the decorated function call (in seconds), only in case of cache miss."""
 
     lock_waiting_ms: int = 0
     """Lock waiting time (in ms), only when used with cache decorators and lock=True."""
@@ -154,7 +157,6 @@ class Service:
 
     def safe_call_hook(
         self,
-        perf_counter: float,
         str,
         tag_names: List[str],
         cache_info: CacheInfo,
@@ -167,7 +169,6 @@ class Service:
         """
         if not self.cache_hook:
             return
-        cache_info.elapsed = time.perf_counter() - perf_counter
         try:
             self.cache_hook(str, tag_names, userdata=userdata, cache_info=cache_info)
         except Exception:
@@ -475,8 +476,9 @@ class Service:
                         try:
                             unserialized = unserializer(serialized_res)
                             cache_info.hit = True
+                            cache_info.elapsed = time.perf_counter() - before
                             self.safe_call_hook(
-                                before, key, full_tag_names, cache_info, hook_userdata
+                                key, full_tag_names, cache_info, hook_userdata
                             )
                             return unserialized
                         except Exception:
@@ -488,7 +490,10 @@ class Service:
                             if lock_id and storage_key:
                                 self.storage_adapter.unlock(storage_key, lock_id)
                 # cache miss => let's call the decorated function
+                before_decorated = time.perf_counter()
                 res = f(*args, **kwargs)
+                cache_info.elapsed = time.perf_counter() - before_decorated
+
                 if key is not None and full_tag_names is not None:
                     serialized = serializer(res)
                     if serialized is not None:
@@ -497,8 +502,8 @@ class Service:
                         )
                 if lock_id and storage_key:
                     self.storage_adapter.unlock(storage_key, lock_id)
+                cache_info.elapsed = time.perf_counter() - before
                 self.safe_call_hook(
-                    before,
                     key,
                     full_tag_names if full_tag_names else [],
                     cache_info,
