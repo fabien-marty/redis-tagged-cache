@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.10.1](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.10.1) (2025-02-13)
+
+#### Fixed
+
+- fix decorated_elapsed cache info field [\#50](https://github.com/fabien-marty/redis-tagged-cache/pull/50) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.10.0...v0.10.1)</sub>
+
 ## [v0.10.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.10.0) (2025-02-07)
 
 #### Added
