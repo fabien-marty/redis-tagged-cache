@@ -492,7 +492,7 @@ class Service:
                 # cache miss => let's call the decorated function
                 before_decorated = time.perf_counter()
                 res = f(*args, **kwargs)
-                cache_info.elapsed = time.perf_counter() - before_decorated
+                cache_info.decorated_elapsed = time.perf_counter() - before_decorated
 
                 if key is not None and full_tag_names is not None:
                     serialized = serializer(res)
