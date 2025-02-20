@@ -1,10 +1,15 @@
 import logging
-import pickle
 from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any, Callable, List, Optional, Union
 
-from rtc.app.service import CacheHook, CacheMiss, Service
+from rtc.app.service import (
+    DEFAULT_SERIALIZER,
+    DEFAULT_UNSERIALIZER,
+    CacheHook,
+    CacheMiss,
+    Service,
+)
 from rtc.app.storage import StoragePort
 from rtc.infra.adapters.storage.blackhole import BlackHoleStorageAdapter
 from rtc.infra.adapters.storage.redis import RedisStorageAdapter
@@ -78,10 +83,10 @@ class RedisTaggedCache:
 
     """
 
-    serializer: Callable[[Any], bytes] = pickle.dumps
+    serializer: Callable[[Any], Optional[bytes]] = DEFAULT_SERIALIZER
     """Serializer function to serialize data before storing it in the cache."""
 
-    unserializer: Callable[[bytes], Any] = pickle.loads
+    unserializer: Callable[[bytes], Any] = DEFAULT_UNSERIALIZER
     """Unserializer function to unserialize data after reading it from the cache."""
 
     _internal_lock: Lock = field(init=False, default_factory=Lock)
@@ -258,29 +263,16 @@ class RedisTaggedCache:
         ```
 
         """
-        if callable(tags):
-            return self._service.decorator(
-                [],
-                lifetime=lifetime,
-                dynamic_tag_names=tags,
-                dynamic_key=key,
-                hook_userdata=hook_userdata,
-                serializer=serializer if serializer else self._serialize,
-                unserializer=unserializer if unserializer else self._unserialize,
-                lock=lock,
-                lock_timeout=lock_timeout,
-            )
-        else:
-            return self._service.decorator(
-                tags or [],
-                lifetime=lifetime,
-                dynamic_key=key,
-                hook_userdata=hook_userdata,
-                serializer=serializer if serializer else self._serialize,
-                unserializer=unserializer if unserializer else self._unserialize,
-                lock=lock,
-                lock_timeout=lock_timeout,
-            )
+        return self._service.decorator(
+            tags,
+            lifetime=lifetime,
+            key=key,
+            hook_userdata=hook_userdata,
+            serializer=serializer if serializer else self.serializer,
+            unserializer=unserializer if unserializer else self.unserializer,
+            lock=lock,
+            lock_timeout=lock_timeout,
+        )
 
     def method_decorator(
         self,
@@ -330,28 +322,14 @@ class RedisTaggedCache:
         ```
 
         """
-        if callable(tags):
-            return self._service.decorator(
-                [],
-                lifetime=lifetime,
-                dynamic_tag_names=tags,
-                dynamic_key=key,
-                ignore_first_argument=True,
-                hook_userdata=hook_userdata,
-                serializer=serializer if serializer else self._serialize,
-                unserializer=unserializer if unserializer else self._unserialize,
-                lock=lock,
-                lock_timeout=lock_timeout,
-            )
-        else:
-            return self._service.decorator(
-                tags or [],
-                lifetime=lifetime,
-                dynamic_key=key,
-                ignore_first_argument=True,
-                hook_userdata=hook_userdata,
-                serializer=serializer if serializer else self._serialize,
-                unserializer=unserializer if unserializer else self._unserialize,
-                lock=lock,
-                lock_timeout=lock_timeout,
-            )
+        return self._service.decorator(
+            tags,
+            lifetime=lifetime,
+            key=key,
+            ignore_first_argument=True,
+            hook_userdata=hook_userdata,
+            serializer=serializer if serializer else DEFAULT_SERIALIZER,
+            unserializer=unserializer if unserializer else DEFAULT_UNSERIALIZER,
+            lock=lock,
+            lock_timeout=lock_timeout,
+        )
