@@ -64,7 +64,7 @@ def test_invalidate_all(service: Service):
 
 
 def test_function_decorator(service: Service):
-    @service.decorator(tag_names=["tag1", "tag2"])
+    @service.decorator(["tag1", "tag2"])
     def decorated(*args, **kwargs):
         service.set_value("called", b"called", tag_names=[])
         return [args, kwargs]
@@ -87,12 +87,12 @@ def test_function_decorator(service: Service):
 
 
 def test_function_decorator_multiple(service: Service):
-    @service.decorator(tag_names=["tag1", "tag2"])
+    @service.decorator(["tag1", "tag2"])
     def decorated(*args, **kwargs):
         service.set_value("called", b"called", tag_names=[])
         return [1, args, kwargs]
 
-    @service.decorator(tag_names=["tag1", "tag2"])
+    @service.decorator(["tag1", "tag2"])
     def decorated2(*args, **kwargs):
         service.set_value("called2", b"called2", tag_names=[])
         return [2, args, kwargs]
@@ -109,7 +109,7 @@ def test_function_decorator_multiple(service: Service):
 
 def test_method_decorator(service: Service):
     class A:
-        @service.decorator(tag_names=["tag1", "tag2"], ignore_first_argument=True)
+        @service.decorator(["tag1", "tag2"], ignore_first_argument=True)
         def decorated(self, *args, **kwargs):
             service.set_value("called", b"called", tag_names=[])
             return [args, kwargs]
@@ -131,15 +131,14 @@ def test_method_decorator(service: Service):
 
 def dynamic_tags(self, *args, **kwargs) -> List[str]:
     assert args == (1, "2")
-    return ["tag3"]
+    return ["tag1", "tag2", "tag3"]
 
 
 def test_dynamic_tags(service: Service):
     class A:
         @service.decorator(
             ignore_first_argument=True,
-            tag_names=["tag1", "tag2"],
-            dynamic_tag_names=dynamic_tags,
+            tags=dynamic_tags,
         )
         def decorated(self, *args, **kwargs):
             service.set_value("called", b"called", tag_names=[])

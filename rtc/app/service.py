@@ -7,6 +7,7 @@ import pickle
 import time
 import uuid
 from dataclasses import dataclass, field
+from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from rtc.app.storage import StoragePort
@@ -21,34 +22,52 @@ except Exception:
 
 
 SPECIAL_ALL_TAG_NAME = "@@@all@@@"
+SHORT_HASH_BYTES = 8  # Number of bytes to use for short hash generation
+
+# Default serialization functions
+DEFAULT_SERIALIZER: Callable[[Any], Optional[bytes]] = pickle.dumps
+DEFAULT_UNSERIALIZER: Callable[[bytes], Any] = pickle.loads
+
+
+def _sha256_hash(data: Union[str, bytes]):
+    """Generate a sha256 hash of the given string or bytes."""
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    return hashlib.sha256(data)
 
 
 def _sha256_binary_hash(data: Union[str, bytes]) -> bytes:
     """Generate a binary hash (bytes) of the given string or bytes."""
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    h = hashlib.sha256(data)
-    return h.digest()
+    return _sha256_hash(data).digest()
 
 
 def _sha256_text_hash(data: Union[str, bytes]) -> str:
-    """Generate a hexa hash (str) of the given string or bytes."""
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    h = hashlib.sha256(data)
-    return h.hexdigest()
+    """Generate a hexa hash (str) of the given string or bytes.
+
+    Args:
+        data: The data to hash.
+
+    Returns:
+        A hexadecimal hash of the given data.
+    """
+    return _sha256_hash(data).hexdigest()
 
 
 def short_hash(data: Union[str, bytes]) -> str:
-    """Generate a short alpha-numeric hash of the given string or bytes."""
-    h = _sha256_binary_hash(data)[0:8]
-    return (
-        base64.b64encode(h)
-        .decode("utf-8")
-        .replace("=", "")
-        .replace("+", "-")
-        .replace("/", "_")
-    )
+    """Generate a short alpha-numeric hash of the given string or bytes.
+
+    This function takes a string or bytes input, generates a SHA-256 hash, takes the first 8 bytes,
+    encodes it in URL-safe base64, and returns a clean alpha-numeric string by removing padding
+    and replacing hyphens.
+
+    Args:
+        data: The input string or bytes to hash.
+
+    Returns:
+        A short alpha-numeric hash string derived from the input data.
+    """
+    h = _sha256_binary_hash(data)[0:SHORT_HASH_BYTES]
+    return base64.urlsafe_b64encode(h).decode("utf-8").replace("=", "").replace("-", "")
 
 
 def get_logger() -> logging.Logger:
@@ -160,7 +179,7 @@ class Service:
 
     def safe_call_hook(
         self,
-        str,
+        cache_key: str,
         tag_names: List[str],
         cache_info: CacheInfo,
         userdata: Optional[Any] = None,
@@ -173,7 +192,9 @@ class Service:
         if not self.cache_hook:
             return
         try:
-            self.cache_hook(str, tag_names, userdata=userdata, cache_info=cache_info)
+            self.cache_hook(
+                cache_key, tag_names, userdata=userdata, cache_info=cache_info
+            )
         except Exception:
             self.logger.warning(
                 f"Error while calling hook {self.cache_hook}", exc_info=True
@@ -360,14 +381,14 @@ class Service:
     def _decorator_get_key(
         self,
         cache_info: CacheInfo,
-        dynamic_key: Optional[Callable[..., str]],
+        key: Optional[Callable[..., str]],
         decorated_args_index: int,
         *decorated_args,
         **decorated_kwargs,
     ) -> Optional[str]:
-        if dynamic_key is not None:
+        if key is not None:
             try:
-                return dynamic_key(*decorated_args, **decorated_kwargs)
+                return key(*decorated_args, **decorated_kwargs)
             except Exception:
                 logging.warning(
                     "error while computing dynamic key => cache bypassed",
@@ -393,38 +414,35 @@ class Service:
 
     def _decorator_get_full_tag_names(
         self,
-        tag_names: List[str],
-        dynamic_tag_names: Optional[Callable[..., List[str]]],
+        tags: Optional[Union[List[str], Callable[..., List[str]]]] = None,
         *decorated_args,
         **decorated_kwargs,
     ) -> Optional[List[str]]:
-        if dynamic_tag_names:
+        if callable(tags):
             try:
-                return tag_names + dynamic_tag_names(
-                    *decorated_args, **decorated_kwargs
-                )
+                return tags(*decorated_args, **decorated_kwargs)
             except Exception:
                 logging.warning(
                     "error while computing dynamic tag names => cache bypassed",
                     exc_info=True,
                 )
                 return None
-        return tag_names
+        return tags
 
     def decorator(
         self,
-        tag_names: List[str],
+        tags: Optional[Union[List[str], Callable[..., List[str]]]] = None,
         ignore_first_argument: bool = False,
         lifetime: Optional[int] = None,
-        dynamic_tag_names: Optional[Callable[..., List[str]]] = None,
-        dynamic_key: Optional[Callable[..., str]] = None,
+        key: Optional[Callable[..., str]] = None,
         hook_userdata: Optional[Any] = None,
-        serializer: Callable[[Any], Optional[bytes]] = pickle.dumps,
-        unserializer: Callable[[bytes], Any] = pickle.loads,
+        serializer: Callable[[Any], Optional[bytes]] = DEFAULT_SERIALIZER,
+        unserializer: Callable[[bytes], Any] = DEFAULT_UNSERIALIZER,
         lock: bool = False,
         lock_timeout: int = 5,
     ):
         def inner_decorator(f: Any):
+            @wraps(f)
             def wrapped(*args: Any, **kwargs: Any):
                 before = time.perf_counter()
                 args_index: int = 0
@@ -443,23 +461,23 @@ class Service:
                     function_kwargs=kwargs,
                     method_decorator=ignore_first_argument,
                 )
-                key = self._decorator_get_key(
+                ckey = self._decorator_get_key(
                     cache_info,
-                    dynamic_key,
+                    key,
                     args_index,
                     *args,
                     **kwargs,
                 )
                 full_tag_names = self._decorator_get_full_tag_names(
-                    tag_names, dynamic_tag_names, *args, **kwargs
+                    tags, *args, **kwargs
                 )
                 lock_id: Optional[str] = None
                 storage_key: Optional[str] = None
-                if key is not None and full_tag_names is not None:
+                if ckey is not None and full_tag_names is not None:
                     serialized_res: Optional[bytes]
                     if lock:
                         get_or_lock_result = self.get_value_or_lock_id(
-                            key,
+                            ckey,
                             full_tag_names,
                             lock_timeout=lock_timeout,
                         )
@@ -471,7 +489,7 @@ class Service:
                         cache_info.lock_waiting_ms = get_or_lock_result.waiting_ms
                     else:
                         serialized_res = self.get_value(
-                            key,
+                            ckey,
                             full_tag_names,
                         )
                     if serialized_res is not None:
@@ -482,7 +500,7 @@ class Service:
                             cache_info.hit = True
                             cache_info.elapsed = time.perf_counter() - before
                             self.safe_call_hook(
-                                key, full_tag_names, cache_info, hook_userdata
+                                ckey, full_tag_names, cache_info, hook_userdata
                             )
                             return unserialized
                         except Exception:
@@ -498,22 +516,30 @@ class Service:
                 res = f(*args, **kwargs)
                 cache_info.decorated_elapsed = time.perf_counter() - before_decorated
 
-                if key is not None and full_tag_names is not None:
-                    serialized = serializer(res)
+                if ckey is not None and full_tag_names is not None:
+                    serialized: Optional[bytes] = None
+                    try:
+                        serialized = serializer(res)
+                    except Exception:
+                        logging.warning(
+                            "error while serializing cache value => cache bypassed",
+                            exc_info=True,
+                        )
                     if serialized is not None:
                         cache_info.serialized_size = len(serialized)
                         self.set_value(
-                            key, serialized, full_tag_names, lifetime=lifetime
+                            ckey, serialized, full_tag_names, lifetime=lifetime
                         )
                 if lock_id and storage_key:
                     self.storage_adapter.unlock(storage_key, lock_id)
-                cache_info.elapsed = time.perf_counter() - before
-                self.safe_call_hook(
-                    key,
-                    full_tag_names if full_tag_names else [],
-                    cache_info,
-                    hook_userdata,
-                )
+                if ckey:
+                    cache_info.elapsed = time.perf_counter() - before
+                    self.safe_call_hook(
+                        ckey,
+                        full_tag_names if full_tag_names else [],
+                        cache_info,
+                        hook_userdata,
+                    )
                 return res
 
             return wrapped
