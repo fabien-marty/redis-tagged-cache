@@ -105,6 +105,9 @@ class CacheInfo:
     lock_full_miss: bool = False
     """Lock full miss (we acquired a lock but the value was not cached after that => full cache miss), only when used with cache decorators and lock=True."""
 
+    serialized_size: int = 0
+    """Serialized size of the value (in bytes)."""
+
     # extra note: if lock_full_hit = False and lock_full_miss = False (when used with cache decorators and lock=True),
     # it means that the value was initially not here, so we acquired a lock but the value was cached after that (anti-dogpile effect)
 
@@ -473,6 +476,7 @@ class Service:
                         )
                     if serialized_res is not None:
                         # cache hit!
+                        cache_info.serialized_size = len(serialized_res)
                         try:
                             unserialized = unserializer(serialized_res)
                             cache_info.hit = True
@@ -497,6 +501,7 @@ class Service:
                 if key is not None and full_tag_names is not None:
                     serialized = serializer(res)
                     if serialized is not None:
+                        cache_info.serialized_size = len(serialized)
                         self.set_value(
                             key, serialized, full_tag_names, lifetime=lifetime
                         )
