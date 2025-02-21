@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [v0.11.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.11.0) (2025-02-21)
+
+#### Added
+
+- add serialized_size to CacheInfo [\#52](https://github.com/fabien-marty/redis-tagged-cache/pull/52) ([fabien-marty](https://github.com/fabien-marty))
+
+#### Changed
+
+- Refactor cache decorator to improve flexibility and error handling [\#53](https://github.com/fabien-marty/redis-tagged-cache/pull/53) ([fabien-marty](https://github.com/fabien-marty))
+- various performance improvements [\#54](https://github.com/fabien-marty/redis-tagged-cache/pull/54) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.10.1...v0.11.0)</sub>
+
 ## [v0.10.1](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.10.1) (2025-02-13)
 
 #### Fixed
