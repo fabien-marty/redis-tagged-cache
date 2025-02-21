@@ -1,11 +1,11 @@
 import base64
-import hashlib
 import inspect
 import json
 import logging
 import pickle
 import time
 import uuid
+import zlib
 from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -22,52 +22,47 @@ except Exception:
 
 
 SPECIAL_ALL_TAG_NAME = "@@@all@@@"
-SHORT_HASH_BYTES = 8  # Number of bytes to use for short hash generation
 
 # Default serialization functions
 DEFAULT_SERIALIZER: Callable[[Any], Optional[bytes]] = pickle.dumps
 DEFAULT_UNSERIALIZER: Callable[[bytes], Any] = pickle.loads
 
 
-def _sha256_hash(data: Union[str, bytes]):
-    """Generate a sha256 hash of the given string or bytes."""
-    if isinstance(data, str):
-        data = data.encode("utf-8")
-    return hashlib.sha256(data)
+def _hash(data: Union[str, bytes]) -> int:
+    """Generate a hash of the given string or bytes.
 
-
-def _sha256_binary_hash(data: Union[str, bytes]) -> bytes:
-    """Generate a binary hash (bytes) of the given string or bytes."""
-    return _sha256_hash(data).digest()
-
-
-def _sha256_text_hash(data: Union[str, bytes]) -> str:
-    """Generate a hexa hash (str) of the given string or bytes.
-
-    Args:
-        data: The data to hash.
+    This is a simple hash function that uses the zlib library.
+    It is not a cryptographic hash function, but it is fast and suitable for our use case.
 
     Returns:
-        A hexadecimal hash of the given data.
+        A 32-bit (non signed) integer hash of the given data.
     """
-    return _sha256_hash(data).hexdigest()
+    if isinstance(data, str):
+        data = data.encode("utf-8")
+    return zlib.adler32(data) & 0xFFFFFFFF
 
 
 def short_hash(data: Union[str, bytes]) -> str:
-    """Generate a short alpha-numeric hash of the given string or bytes.
+    """Generate a text hash of the given string or bytes.
 
-    This function takes a string or bytes input, generates a SHA-256 hash, takes the first 8 bytes,
-    encodes it in URL-safe base64, and returns a clean alpha-numeric string by removing padding
-    and replacing hyphens.
-
-    Args:
-        data: The input string or bytes to hash.
+    This is a simple hash function that uses the zlib library.
+    It is not a cryptographic hash function, but it is fast and suitable for our use case.
 
     Returns:
-        A short alpha-numeric hash string derived from the input data.
+        A base64 encoded string (url variant) of the hash (without padding and with ~ instead of -)
     """
-    h = _sha256_binary_hash(data)[0:SHORT_HASH_BYTES]
-    return base64.urlsafe_b64encode(h).decode("utf-8").replace("=", "").replace("-", "")
+    h = _hash(data)
+    return (
+        base64.urlsafe_b64encode(h.to_bytes(4, "big"))
+        .decode("utf-8")
+        .rstrip("=")
+        .replace("-", "~")
+    )
+
+
+def get_random_bytes() -> bytes:
+    """Generate a random bytes string."""
+    return uuid.uuid4().bytes
 
 
 def get_logger() -> logging.Logger:
@@ -233,7 +228,7 @@ class Service:
                 # First use of this tag! Let's generate a fist value
                 # Yes, there is a race condition here, but it's not a big problem
                 # (maybe we are going to invalidate the tag twice)
-                new_value = short_hash(uuid.uuid4().bytes).encode("utf-8")
+                new_value = get_random_bytes()
                 self.storage_adapter.set(
                     tag_storage_key,
                     new_value,
@@ -256,16 +251,32 @@ class Service:
 
     def invalidate_tags(self, tag_names: List[str]) -> None:
         """Invalidate a list of tag names."""
+        if len(tag_names) == 1 and tag_names[0] == SPECIAL_ALL_TAG_NAME:
+            self.logger.debug("Invalidating all cache")
+        kvs: Dict[str, bytes] = {}
         for tag_name in tag_names:
-            if tag_name == SPECIAL_ALL_TAG_NAME:
-                self.logger.debug("Invalidating all cache")
-            else:
-                self.logger.debug(f"Invalidating tag {tag_name}")
-        self.storage_adapter.mdelete([self.get_storage_tag_key(t) for t in tag_names])
+            self.logger.debug(f"Invalidating tag {tag_name}")
+            kvs[self.get_storage_tag_key(tag_name)] = get_random_bytes()
+        self.storage_adapter.mset(kvs, self.lifetime_for_tags or self.default_lifetime)
 
     def invalidate_all(self) -> None:
         """Invalidate all entries."""
         self.invalidate_tags([SPECIAL_ALL_TAG_NAME])
+
+    def _set_value(
+        self,
+        storage_key: str,
+        value: bytes,
+        tag_names: List[str],
+        lifetime: Optional[int] = None,
+    ) -> None:
+        resolved_lifetime = self.resolve_lifetime(lifetime)
+        self.logger.debug(
+            "set value for cache key: %s and tags: %s",
+            storage_key,
+            ", ".join(tag_names),
+        )
+        self.storage_adapter.set(storage_key, value, lifetime=resolved_lifetime)
 
     def set_value(
         self,
@@ -280,11 +291,7 @@ class Service:
 
         """
         storage_key = self.get_storage_value_key(key, tag_names)
-        resolved_lifetime = self.resolve_lifetime(lifetime)
-        self.logger.debug(
-            "set value for cache key: %s and tags: %s", key, ", ".join(tag_names)
-        )
-        self.storage_adapter.set(storage_key, value, lifetime=resolved_lifetime)
+        self._set_value(storage_key, value, tag_names, lifetime)
 
     def _get_value(
         self,
@@ -404,7 +411,7 @@ class Service:
                 ],
                 sort_keys=True,
             ).encode("utf-8")
-            return _sha256_text_hash(serialized_args)
+            return short_hash(serialized_args)
         except Exception:
             logging.warning(
                 "arguments are not JSON serializable => cache bypassed",
@@ -427,7 +434,7 @@ class Service:
                     exc_info=True,
                 )
                 return None
-        return tags
+        return tags or []
 
     def decorator(
         self,
@@ -488,7 +495,7 @@ class Service:
                         cache_info.lock_full_miss = get_or_lock_result.full_miss
                         cache_info.lock_waiting_ms = get_or_lock_result.waiting_ms
                     else:
-                        serialized_res = self.get_value(
+                        serialized_res, storage_key = self._get_value(
                             ckey,
                             full_tag_names,
                         )
@@ -525,10 +532,10 @@ class Service:
                             "error while serializing cache value => cache bypassed",
                             exc_info=True,
                         )
-                    if serialized is not None:
+                    if serialized is not None and storage_key is not None:
                         cache_info.serialized_size = len(serialized)
-                        self.set_value(
-                            ckey, serialized, full_tag_names, lifetime=lifetime
+                        self._set_value(
+                            storage_key, serialized, full_tag_names, lifetime=lifetime
                         )
                 if lock_id and storage_key:
                     self.storage_adapter.unlock(storage_key, lock_id)
