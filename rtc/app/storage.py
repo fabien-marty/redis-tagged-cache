@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 
 class StoragePort(ABC):
@@ -15,6 +15,15 @@ class StoragePort(ABC):
 
         """
         pass
+
+    def mset(self, kvs: Dict[str, bytes], lifetime: Optional[int] = None) -> None:
+        """Set multiple values under the given keys for the given lifetime (in seconds).
+
+        Note: lifetime = None means no expiration.
+
+        """
+        for k, v in kvs.items():
+            self.set(k, v, lifetime)
 
     @abstractmethod
     def mget(self, storage_keys: List[str]) -> List[Optional[bytes]]:
