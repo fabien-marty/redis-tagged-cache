@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.11.1](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.11.1) (2025-02-25)
+
+#### Changed
+
+- switch to 64bits hash [\#56](https://github.com/fabien-marty/redis-tagged-cache/pull/56) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.11.0...v0.11.1)</sub>
+
 ## [v0.11.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.11.0) (2025-02-21)
 
 #### Added
