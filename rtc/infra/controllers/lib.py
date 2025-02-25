@@ -328,8 +328,8 @@ class RedisTaggedCache:
             key=key,
             ignore_first_argument=True,
             hook_userdata=hook_userdata,
-            serializer=serializer if serializer else DEFAULT_SERIALIZER,
-            unserializer=unserializer if unserializer else DEFAULT_UNSERIALIZER,
+            serializer=serializer if serializer else self.serializer,
+            unserializer=unserializer if unserializer else self.unserializer,
             lock=lock,
             lock_timeout=lock_timeout,
         )
