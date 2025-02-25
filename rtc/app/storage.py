@@ -1,5 +1,15 @@
+import logging
 from abc import ABC, abstractmethod
-from typing import Dict, List, Optional
+from dataclasses import dataclass, field
+from typing import Optional
+
+from rtc.app.exc import CacheException
+
+DEFAULT_LIFETIME = 86400  # Default lifetime (in seconds)
+
+
+class StorageCacheException(CacheException):
+    pass
 
 
 class StoragePort(ABC):
@@ -7,79 +17,93 @@ class StoragePort(ABC):
 
     @abstractmethod
     def set(
-        self, storage_key: str, value: bytes, lifetime: Optional[int] = None
+        self,
+        namespace: str,
+        key: str,
+        metadata_hash: str,
+        value: bytes,
+        lifetime: int,
     ) -> None:
         """Set a value under the given key for the given lifetime (in seconds).
 
-        Note: lifetime = None means no expiration.
+        Note: <=0 means "no expiration"
+
+        Raises:
+            StorageException: if we can't store the value.
 
         """
         pass
-
-    def mset(self, kvs: Dict[str, bytes], lifetime: Optional[int] = None) -> None:
-        """Set multiple values under the given keys for the given lifetime (in seconds).
-
-        Note: lifetime = None means no expiration.
-
-        """
-        for k, v in kvs.items():
-            self.set(k, v, lifetime)
 
     @abstractmethod
-    def mget(self, storage_keys: List[str]) -> List[Optional[bytes]]:
-        """Read multiple keys and return corresponding values.
-
-        If a key does not exist, None is returned for the corresponding value.
-        The returned list always has the same length than the keys list.
-
-        """
-        pass
-
-    def get(self, storage_key: str) -> Optional[bytes]:
+    def get(self, namespace: str, key: str, metadata_hash: str) -> Optional[bytes]:
         """Read the value under the given key and return the value.
 
         If the key does not exist, None is returned.
-        """
-        return self.mget([storage_key])[0]
 
-    @abstractmethod
-    def mdelete(self, storage_keys: List[str]) -> None:
-        """Delete entries under the given keys.
-
-        Note: if a key does not exist, no exception is raised.
+        Raises:
+            StorageException: if we had an excepted error (not if the key does not exist).
 
         """
         pass
 
-    def delete(self, storage_keys: str) -> None:
+    @abstractmethod
+    def delete(self, namespace: str, key: str, metadata_hash: str) -> bool:
         """Delete the entry under the given key.
 
         Note: if the key does not exist, no exception is raised.
 
-        """
-        return self.mdelete([storage_keys])
+        Returns:
+            true if we really deleted something.
 
-    @abstractmethod
-    def lock(
-        self, storage_key: str, timeout: int = 5, waiting: int = 1
-    ) -> Optional[str]:
-        """Lock the entry under the given key.
-
-        The lock is live until unlock() call or the lock is expired (after timeout seconds).
-
-        This call is blocking (up to waiting seconds) until the lock is acquired.
-
-        If None is returned, the lock could not be acquired in the waiting delay.
-        Otherwise, the lock is acquired and a unique lock identifier is returned.
+        Raises:
+            StorageException: if we had an excepted error (not if the key does not exist).
 
         """
         pass
 
-    @abstractmethod
-    def unlock(self, storage_key: str, lock_identifier: str) -> None:
-        """Unlock the entry under the given key.
 
-        The lock_identifier is the one returned by the lock method.
+def get_logger() -> logging.Logger:
+    return logging.getLogger("rtc.app.storage")
+
+
+@dataclass
+class StorageService:
+    namespace: str
+    adapter: StoragePort
+    default_lifetime: int = DEFAULT_LIFETIME
+    logger: logging.Logger = field(default_factory=get_logger)
+
+    def _resolve_lifetime(self, lifetime: Optional[int]) -> int:
+        """Resolve the given lifetime with the default value.
+
+        If the given value is not None => return it. Else return the default value
+        set at the instance level.
 
         """
-        pass
+        if lifetime is not None:
+            return lifetime
+        return self.default_lifetime
+
+    def set(
+        self, key: str, metadata_hash: str, value: bytes, lifetime: Optional[int] = None
+    ) -> None:
+        self.logger.debug(
+            "Setting value for key: %s (metadata_hash: %s)", key, metadata_hash
+        )
+        self.adapter.set(
+            self.namespace,
+            key,
+            metadata_hash,
+            value,
+            self._resolve_lifetime(lifetime),
+        )
+
+    def get(self, key: str, metadata_hash: str) -> Optional[bytes]:
+        self.logger.debug(
+            "Getting value for key: %s (metadata_hash: %s)", key, metadata_hash
+        )
+        return self.adapter.get(self.namespace, key, metadata_hash)
+
+    def delete(self, key: str, metadata_hash: str) -> bool:
+        self.logger.debug("Deleting value for key: %s", key)
+        return self.adapter.delete(self.namespace, key, metadata_hash)

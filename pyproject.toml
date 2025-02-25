@@ -9,6 +9,8 @@ packages = [{ include = "rtc" }]
 [tool.poetry.dependencies]
 python = "^3.7"
 redis = ">=3.2.0"
+decorator = "5.1.1"
+wrapt = "^1.16"
 
 [tool.poetry.group.test.dependencies]
 pytest = [
@@ -38,3 +40,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
 exclude = "^site"
+
+[[tool.mypy.overrides]]
+module = ["wrapt.*"]
+ignore_missing_imports = true
