@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## [v0.11.2](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.11.2) (2025-02-25)
+
+#### Fixed
+
+- fix a regression about overriden serializers [\#58](https://github.com/fabien-marty/redis-tagged-cache/pull/58) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.11.1...v0.11.2)</sub>
+
 ## [v0.11.1](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.11.1) (2025-02-25)
 
 #### Changed
