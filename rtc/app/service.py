@@ -1,11 +1,11 @@
 import base64
+import hashlib
 import inspect
 import json
 import logging
 import pickle
 import time
 import uuid
-import zlib
 from dataclasses import dataclass, field
 from functools import wraps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -22,42 +22,31 @@ except Exception:
 
 
 SPECIAL_ALL_TAG_NAME = "@@@all@@@"
+HASH_SIZE_IN_BYTES = 8
 
 # Default serialization functions
 DEFAULT_SERIALIZER: Callable[[Any], Optional[bytes]] = pickle.dumps
 DEFAULT_UNSERIALIZER: Callable[[bytes], Any] = pickle.loads
 
 
-def _hash(data: Union[str, bytes]) -> int:
-    """Generate a hash of the given string or bytes.
-
-    This is a simple hash function that uses the zlib library.
-    It is not a cryptographic hash function, but it is fast and suitable for our use case.
-
-    Returns:
-        A 32-bit (non signed) integer hash of the given data.
-    """
+def _hash(data: Union[str, bytes]) -> bytes:
+    """Generate a hash of the given string or bytes."""
     if isinstance(data, str):
         data = data.encode("utf-8")
-    return zlib.adler32(data) & 0xFFFFFFFF
+    return hashlib.md5(data).digest()
 
 
 def short_hash(data: Union[str, bytes]) -> str:
-    """Generate a text hash of the given string or bytes.
+    """Generate a short text hash of the given string or bytes.
 
-    This is a simple hash function that uses the zlib library.
     It is not a cryptographic hash function, but it is fast and suitable for our use case.
+    You can configure the hash size in bytes in the HASH_SIZE_IN_BYTES constant.
 
     Returns:
         A base64 encoded string (url variant) of the hash (without padding and with ~ instead of -)
     """
-    h = _hash(data)
-    return (
-        base64.urlsafe_b64encode(h.to_bytes(4, "big"))
-        .decode("utf-8")
-        .rstrip("=")
-        .replace("-", "~")
-    )
+    h = _hash(data)[0:HASH_SIZE_IN_BYTES]
+    return base64.urlsafe_b64encode(h).decode("utf-8").rstrip("=").replace("-", "~")
 
 
 def get_random_bytes() -> bytes:
