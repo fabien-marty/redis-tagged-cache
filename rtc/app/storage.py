@@ -3,13 +3,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Optional
 
-from rtc.app.exc import CacheException
-
 DEFAULT_LIFETIME = 86400  # Default lifetime (in seconds)
-
-
-class StorageCacheException(CacheException):
-    pass
 
 
 class StoragePort(ABC):

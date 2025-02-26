@@ -19,7 +19,7 @@ class LockWithId:
     def acquire(self, wait_timeout: int) -> Optional[str]:
         acquired = self._lock.acquire(blocking=True, timeout=wait_timeout)
         if acquired:
-            self._id = str(uuid.uuid4())
+            self._id = str(get_random_bytes().hex())
             return self._id
         return None
 

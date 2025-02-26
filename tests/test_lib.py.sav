@@ -17,7 +17,7 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
 
 def _instance(**kwargs) -> RedisTaggedCache:
     if "namespace" not in kwargs:
-        namespace = str(uuid.uuid4())
+        namespace = str(get_random_bytes().hex())
         kwargs = {"namespace": namespace, **kwargs}
     if REDIS_HOST:
         kwargs["host"] = REDIS_HOST

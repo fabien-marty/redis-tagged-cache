@@ -1,18 +1,14 @@
+import itertools
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Iterable, Optional
 
-from rtc.app.exc import CacheException
 from rtc.app.hash import short_hash
 
 SPECIAL_ALL_TAG_NAME = "@@@all@@@"
 
 DEFAULT_LIFETIME = 604800  # Default lifetime (in seconds)
-
-
-class MetadataCacheException(CacheException):
-    pass
 
 
 class MetadataPort(ABC):
@@ -105,8 +101,9 @@ class MetadataService:
         return self.adapter.invalidate_tags(self.namespace, (SPECIAL_ALL_TAG_NAME,))
 
     def get_metadata_hash(self, tag_names: Iterable[str]) -> str:
+        sorted_tag_names = sorted(itertools.chain(tag_names, (SPECIAL_ALL_TAG_NAME,)))
         tags_values = self.adapter.get_or_set_tag_values(
-            self.namespace, tag_names, self.lifetime
+            self.namespace, sorted_tag_names, self.lifetime
         )
         return short_hash(b" ".join(tags_values))
 

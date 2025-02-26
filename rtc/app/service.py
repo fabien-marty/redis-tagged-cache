@@ -1,14 +1,13 @@
 import logging
 import time
-import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, List, Optional, Tuple
 
-from rtc.app.decorator import CacheHook, CacheInfo, cache_decorator
 from rtc.app.exc import CacheException, CacheMiss
 from rtc.app.metadata import MetadataService
 from rtc.app.serializer import DEFAULT_SERIALIZER, DEFAULT_UNSERIALIZER
 from rtc.app.storage import StorageService
+from rtc.app.types import CacheHook, CacheInfo
 
 
 @dataclass(frozen=True)
@@ -25,11 +24,6 @@ class GetOrLockResult:
             raise ValueError("full_hit and full_miss cannot be True at the same time")
         if self.value is not None and self.lock_id is not None:
             raise ValueError("value and lock_id cannot be set at the same time")
-
-
-def get_random_bytes() -> bytes:
-    """Generate a random bytes string."""
-    return uuid.uuid4().bytes
 
 
 def get_logger() -> logging.Logger:
@@ -154,7 +148,7 @@ class Service:
                 exc_info=True,
             )
             return False
-        return self.set_bytes(key, value, tag_names, lifetime)
+        return self.set_bytes(key, value_bytes, tag_names, lifetime)
 
     def _get_bytes(
         self, key: str, tag_names: Optional[Iterable[str]] = None
@@ -198,13 +192,6 @@ class Service:
         except CacheException:
             self.logger.warning("cache exception when deleting a key", exc_info=True)
             return False
-
-    def decorator(self, tags=None, *, ignore_first_argument=False, tags_generator=None):
-        return cache_decorator(
-            tags=tags,
-            ignore_first_argument=ignore_first_argument,
-            tags_generator=tags_generator,
-        )
 
     def __get_bytes_or_lock_id(
         self,

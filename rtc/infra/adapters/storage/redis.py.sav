@@ -35,10 +35,10 @@ class RedisStorageAdapter(StoragePort):
             )
         return self._redis_client
 
-    @property
+   @property
     def redis_lock_del_cmd(self) -> Any:
         if self._redis_lock_del_cmd is None:
-            _ = self.redis_client
+            _ = self.redis_client 
             assert self._redis_lock_del_cmd is not None
         return self._redis_lock_del_cmd
 
@@ -79,7 +79,7 @@ class RedisStorageAdapter(StoragePort):
     def lock(
         self, storage_key: str, timeout: int = 5, waiting: int = 1
     ) -> Optional[str]:
-        lock_id = str(uuid.uuid4())
+        lock_id = str(get_random_bytes().hex())
         lock_storage_key = self.get_lock_storage_key(storage_key)
         lock_waiting_key = self.get_lock_waiting_key(storage_key)
         before = time.perf_counter()
