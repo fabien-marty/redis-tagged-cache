@@ -72,21 +72,31 @@ class RedisMetadataAdapter(MetadataPort):
             for i, (tag_key, value) in enumerate(zip(tag_keys, values))
             if value is None
         ]
-        for i, _ in empty_tag_keys:
-            values[i] = get_random_bytes()
         if empty_tag_keys:
             try:
-                self.redis_client.mset({key: values[i] for i, key in empty_tag_keys})
+                pipe = self.redis_client.pipeline()
+                for i, tag_key in empty_tag_keys:
+                    values[i] = get_random_bytes()
+                    pipe.set(tag_key, values[i], ex=lifetime)
+                pipe.execute()
             except Exception as e:
                 raise MetadataCacheException(
                     f"Failed to set tag values in Redis: {e}"
                 ) from e
         return values
 
-    def invalidate_tags(self, namespace: str, tag_names: Iterable[str]) -> None:
+    def invalidate_tags(
+        self, namespace: str, tag_names: Iterable[str], lifetime: Optional[int]
+    ) -> None:
         tag_keys = [get_tag_key(namespace, tag_name) for tag_name in tag_names]
         try:
-            self.redis_client.mset({key: get_random_bytes() for key in tag_keys})
+            pipe = self.redis_client.pipeline()
+            for tag_key in tag_keys:
+                if lifetime:
+                    pipe.set(tag_key, get_random_bytes())
+                else:
+                    pipe.set(tag_key, get_random_bytes(), ex=lifetime)
+            pipe.execute()
         except Exception as e:
             raise MetadataCacheException(
                 f"Failed to set tag values in Redis: {e}"

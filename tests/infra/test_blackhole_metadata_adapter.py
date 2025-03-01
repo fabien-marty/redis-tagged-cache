@@ -31,7 +31,7 @@ def test_invalidate_tags(adapter: MetadataPort):
     assert len(values[0]) >= 4
     assert len(values[1]) >= 4
     assert values[0] != values[1]
-    adapter.invalidate_tags("ns", ["tag1"])
+    adapter.invalidate_tags("ns", ["tag1"], 10)
     new_values = list(adapter.get_or_set_tag_values("ns", ["tag2", "tag1"], 10))
     assert len(new_values) == 2
     assert new_values[0] != values[0]

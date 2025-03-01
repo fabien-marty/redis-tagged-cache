@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 PROTOCOL_AVAILABLE = False
 try:
@@ -71,7 +71,7 @@ if PROTOCOL_AVAILABLE:
         def __call__(
             self,
             cache_key: str,
-            cache_tags: List[str],
+            cache_tags: Iterable[str],
             cache_info: CacheInfo,
             userdata: Any = None,
         ) -> None:

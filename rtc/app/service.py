@@ -1,7 +1,7 @@
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Iterable, Optional, Tuple
 
 from rtc.app.exc import CacheException, CacheMiss
 from rtc.app.metadata import MetadataService
@@ -54,7 +54,7 @@ class Service:
     def _safe_call_hook(
         self,
         cache_key: str,
-        tag_names: List[str],
+        tag_names: Iterable[str],
         cache_info: CacheInfo,
         userdata: Optional[Any] = None,
     ) -> None:

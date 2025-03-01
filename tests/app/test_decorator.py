@@ -1,4 +1,4 @@
-from typing import List
+from typing import Iterable, List, Any
 
 import pytest
 
@@ -6,6 +6,7 @@ from rtc.app.decorator import cache_decorator
 from rtc.app.metadata import MetadataPort, MetadataService
 from rtc.app.service import Service
 from rtc.app.storage import StoragePort, StorageService
+from rtc.app.types import CacheInfo
 from rtc.infra.adapters.metadata.dict import DictMetadataAdapter
 from rtc.infra.adapters.storage.dict import DictStorageAdapter
 
@@ -161,3 +162,27 @@ def test_dynamic_key(service: Service):
     res = a.decorated(2, "3", foo="bar")
     assert res == [(2, "3"), {"foo": "bar"}]
     assert service.get_bytes("called") == b"called"  # Should be called for new key
+
+
+def bad_cache_hook(
+    cache_key: str,
+    cache_tags: Iterable[str],
+    cache_info: CacheInfo,
+    userdata: Any = None,
+):
+    raise ValueError("Bad cache hook")
+
+
+def test_bad_cache_hook(service: Service):
+    service.cache_hook = bad_cache_hook
+
+    @cache_decorator(service=service, tags=["tag1", "tag2"])
+    def decorated(*args, **kwargs):
+        service.set_bytes("called", b"called")
+        return [1, args, kwargs]
+
+    decorated("foo", 1, bar="baz")
+    assert service.get_bytes("called") == b"called"
+    assert service.delete("called") is True
+    decorated("foo", 1, bar="baz")
+    assert service.get_bytes("called") is None

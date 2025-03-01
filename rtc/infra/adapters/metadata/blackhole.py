@@ -7,7 +7,9 @@ from rtc.app.metadata import MetadataPort
 class BlackHoleMetadataAdapter(MetadataPort):
     """Blackhole metadata adapter that does nothing."""
 
-    def invalidate_tags(self, namespace: str, tag_names: Iterable[str]) -> None:
+    def invalidate_tags(
+        self, namespace: str, tag_names: Iterable[str], lifetime: Optional[int]
+    ) -> None:
         return
 
     def get_or_set_tag_values(

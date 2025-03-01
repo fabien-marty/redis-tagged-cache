@@ -33,3 +33,7 @@ def _test_multiple_values(adapter: StoragePort):
     adapter.delete("ns", "key1", "123")
     assert adapter.get("ns", "key1", "123") is None
     assert adapter.get("ns", "key2", "123") == b"value2"
+
+
+def _test_delete_nonexistent(adapter: StoragePort):
+    assert adapter.delete("ns", "key1", "789") is False

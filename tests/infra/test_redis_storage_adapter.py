@@ -6,6 +6,7 @@ from rtc.app.storage import StoragePort
 from rtc.infra.adapters.storage.redis import RedisStorageAdapter
 from tests.infra.storage_adapter import (
     _test_basic,
+    _test_delete_nonexistent,
     _test_expiration,
     _test_multiple_values,
     _test_no_expiration,
@@ -38,3 +39,8 @@ def test_no_expiration(adapter: StoragePort):
 @pytest.mark.skipif(REDIS_HOST == "", reason="REDIS_HOST is not set")
 def test_multiple_values(adapter: StoragePort):
     _test_multiple_values(adapter)
+
+
+@pytest.mark.skipif(REDIS_HOST == "", reason="REDIS_HOST is not set")
+def test_delete_nonexistent(adapter: StoragePort):
+    _test_delete_nonexistent(adapter)

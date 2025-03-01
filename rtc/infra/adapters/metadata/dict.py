@@ -45,9 +45,26 @@ class LockWithId:
 
 
 @dataclass
+class Item:
+    value: bytes
+    lifetime: int
+    _expiration: float = field(default=0.0)
+
+    def __post_init__(self):
+        if self.lifetime > 0:
+            self._expiration = time.perf_counter() + self.lifetime
+
+    @property
+    def is_expired(self) -> bool:
+        if self._expiration < 0.1:
+            return False
+        return time.perf_counter() > self._expiration
+
+
+@dataclass
 class DictMetadataAdapter(MetadataPort):
     _internal_lock: Lock = field(init=False, repr=False, default_factory=Lock)
-    _tags: Dict[Tuple[str, str], bytes] = field(
+    _tags: Dict[Tuple[str, str], Item] = field(
         default_factory=dict
     )  # (namespace, tag_name) -> value
     _locks: Dict[Tuple[str, str, str], LockWithId] = field(
@@ -60,20 +77,29 @@ class DictMetadataAdapter(MetadataPort):
         self._expiration_thread.start()
 
     @locked
-    def invalidate_tags(self, namespace: str, tag_names: Iterable[str]) -> None:
+    def invalidate_tags(
+        self, namespace: str, tag_names: Iterable[str], lifetime: Optional[int]
+    ) -> None:
         for tag_name in tag_names:
-            self._tags[(namespace, tag_name)] = get_random_bytes()
+            print("invalidate_tags", namespace, tag_name)
+            self._tags[(namespace, tag_name)] = Item(
+                value=get_random_bytes(), lifetime=lifetime or 0
+            )
 
     @locked
     def get_or_set_tag_values(
         self, namespace: str, tag_names: Iterable[str], lifetime: Optional[int]
     ) -> Iterable[bytes]:
         for tag_name in tag_names:
-            value = self._tags.get((namespace, tag_name))
-            if value is None:
-                value = get_random_bytes()
-                self._tags[(namespace, tag_name)] = value
-            yield value
+            item = self._tags.get((namespace, tag_name))
+            if item is None:
+                new_value = get_random_bytes()
+                self._tags[(namespace, tag_name)] = Item(
+                    value=new_value, lifetime=lifetime or 0
+                )
+                yield new_value
+            else:
+                yield item.value
 
     def lock(
         self,

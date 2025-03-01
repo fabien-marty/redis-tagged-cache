@@ -15,7 +15,9 @@ class MetadataPort(ABC):
     """Interface for the metadata port."""
 
     @abstractmethod
-    def invalidate_tags(self, namespace: str, tag_names: Iterable[str]) -> None:
+    def invalidate_tags(
+        self, namespace: str, tag_names: Iterable[str], lifetime: Optional[int]
+    ) -> None:
         """Invalidate the given tags.
 
         Note: if a tag does not exist, it is ignored.
@@ -25,7 +27,7 @@ class MetadataPort(ABC):
             tag_names: the names of the tags to invalidate.
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get_or_set_tag_values(
@@ -44,7 +46,7 @@ class MetadataPort(ABC):
             The (unique/random) values of the given tags (same order than the tag names).
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def lock(
@@ -65,7 +67,7 @@ class MetadataPort(ABC):
         Otherwise, the lock is acquired and a unique lock identifier is returned.
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def unlock(
@@ -78,7 +80,7 @@ class MetadataPort(ABC):
         Note: if the lock is not found, this call is a no-op.
 
         """
-        pass
+        pass  # pragma: no cover
 
 
 def get_logger() -> logging.Logger:
@@ -89,21 +91,25 @@ def get_logger() -> logging.Logger:
 class MetadataService:
     namespace: str
     adapter: MetadataPort
-    lifetime: int = DEFAULT_LIFETIME
+    default_lifetime: int = DEFAULT_LIFETIME
     logger: logging.Logger = field(default_factory=get_logger)
 
     def invalidate_tags(self, tag_names: Iterable[str]) -> None:
         self.logger.debug("Invalidating tags: %s", ", ".join(tag_names))
-        return self.adapter.invalidate_tags(self.namespace, tag_names)
+        return self.adapter.invalidate_tags(
+            self.namespace, tag_names, self.default_lifetime
+        )
 
     def invalidate_all(self) -> None:
         self.logger.debug("Invalidating all cache")
-        return self.adapter.invalidate_tags(self.namespace, (SPECIAL_ALL_TAG_NAME,))
+        return self.adapter.invalidate_tags(
+            self.namespace, (SPECIAL_ALL_TAG_NAME,), self.default_lifetime
+        )
 
     def get_metadata_hash(self, tag_names: Iterable[str]) -> str:
         sorted_tag_names = sorted(itertools.chain(tag_names, (SPECIAL_ALL_TAG_NAME,)))
         tags_values = self.adapter.get_or_set_tag_values(
-            self.namespace, sorted_tag_names, self.lifetime
+            self.namespace, sorted_tag_names, self.default_lifetime
         )
         return short_hash(b" ".join(tags_values))
 

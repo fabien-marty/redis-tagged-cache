@@ -1,11 +1,14 @@
 import time
+from typing import Any, Iterable
 
 import pytest
 
 from rtc.app.exc import CacheMiss
 from rtc.app.metadata import MetadataPort, MetadataService
-from rtc.app.service import Service
+from rtc.app.serializer import DEFAULT_SERIALIZER, DEFAULT_UNSERIALIZER
+from rtc.app.service import GetOrLockResult, Service
 from rtc.app.storage import StoragePort, StorageService
+from rtc.app.types import CacheInfo
 from rtc.infra.adapters.metadata.dict import DictMetadataAdapter
 from rtc.infra.adapters.storage.dict import DictStorageAdapter
 
@@ -80,3 +83,45 @@ def test_expiration(service: Service):
     time.sleep(2)
     with pytest.raises(CacheMiss):
         service.get("key1", ["tag2", "tag1"])
+
+
+def test_get_or_lock_result():
+    with pytest.raises(ValueError):
+        GetOrLockResult(full_miss=True, full_hit=True)
+    with pytest.raises(ValueError):
+        GetOrLockResult(value=b"value", lock_id="foo")
+
+
+def bad_serializer(value: Any) -> bytes | None:
+    if value == 1:
+        return None
+    elif value == 2:
+        raise ValueError("Bad serializer")
+    else:
+        return DEFAULT_SERIALIZER(value)
+
+
+def bad_unserializer(value: bytes) -> Any:
+    if value == b"1":
+        return None
+    elif value == b"2":
+        raise ValueError("Bad unserializer")
+    else:
+        return DEFAULT_UNSERIALIZER(value)
+
+
+def test_bad_serializer(service: Service):
+    service.serializer = bad_serializer
+    assert service.set("key", 1) is False
+    assert service.set("key", 2) is False
+    assert service.set("key", 3) is True
+    assert service.get("key") == 3
+
+
+def test_bad_unserializer(service: Service):
+    service.unserializer = bad_unserializer
+    service.set_bytes("key", b"1")
+    assert service.get("key") is None
+    service.set_bytes("key", b"2")
+    with pytest.raises(CacheMiss):
+        service.get("key")

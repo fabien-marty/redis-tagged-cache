@@ -27,7 +27,7 @@ def _test_invalidate_tags(adapter: MetadataPort):
     assert len(new_values) == 2
     assert new_values[0] == values[1]
     assert new_values[1] == values[0]
-    adapter.invalidate_tags("ns", ["tag1"])
+    adapter.invalidate_tags("ns", ["tag1"], 10)
     new_values2 = list(adapter.get_or_set_tag_values("ns", ["tag2", "tag1"], 10))
     assert len(new_values2) == 2
     assert new_values2[0] == new_values[0]
@@ -70,3 +70,14 @@ def _test_lock_wait(adapter: MetadataPort):
     assert id2 is None
     assert after - before > 1
     adapter.unlock("ns", "key", "hash", id1)
+
+
+def _test_expiration(adapter: MetadataPort):
+    adapter.invalidate_tags("ns", ["tag1"], 1)
+    values = list(adapter.get_or_set_tag_values("ns", ["tag1"], 1))
+    assert len(values) == 1
+    new_values = list(adapter.get_or_set_tag_values("ns", ["tag1"], 1))
+    assert new_values[0] == values[0]
+    time.sleep(2)
+    new_values2 = list(adapter.get_or_set_tag_values("ns", ["tag1"], 1))
+    assert new_values2[0] != values[0]

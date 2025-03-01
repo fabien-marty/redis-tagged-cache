@@ -48,7 +48,7 @@ test: check_poetry ## Test the code
 ifeq ($(COVERAGE), 0)
 	$(PYTEST) tests
 else
-	$(PYTEST) --no-cov-on-fail --cov=py_agile_ops --cov-report=term --cov-report=html --cov-report=xml tests
+	$(PYTEST) --no-cov-on-fail --cov=rtc --cov-report=term --cov-report=html --cov-report=xml tests
 endif
 
 .PHONY: clean

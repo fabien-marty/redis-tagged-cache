@@ -26,7 +26,7 @@ class StoragePort(ABC):
             StorageException: if we can't store the value.
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def get(self, namespace: str, key: str, metadata_hash: str) -> Optional[bytes]:
@@ -38,7 +38,7 @@ class StoragePort(ABC):
             StorageException: if we had an excepted error (not if the key does not exist).
 
         """
-        pass
+        pass  # pragma: no cover
 
     @abstractmethod
     def delete(self, namespace: str, key: str, metadata_hash: str) -> bool:
@@ -53,7 +53,7 @@ class StoragePort(ABC):
             StorageException: if we had an excepted error (not if the key does not exist).
 
         """
-        pass
+        pass  # pragma: no cover
 
 
 def get_logger() -> logging.Logger:

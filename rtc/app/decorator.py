@@ -2,7 +2,7 @@ import inspect
 import json
 import logging
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
 
 import wrapt
 
@@ -52,11 +52,11 @@ def _get_key(
 
 
 def _get_full_tag_names(
-    tags: Optional[Union[List[str], Callable[..., List[str]]]],
+    tags: Optional[Union[Iterable[str], Callable[..., Iterable[str]]]],
     instance: Any,
     *decorated_args,
     **decorated_kwargs,
-) -> Optional[List[str]]:
+) -> Optional[Iterable[str]]:
     if callable(tags):
         try:
             if instance is None:
@@ -75,7 +75,7 @@ def _get_full_tag_names(
 def cache_decorator(
     *,
     service: Service,
-    tags: Optional[Union[List[str], Callable[..., List[str]]]] = None,
+    tags: Optional[Union[Iterable[str], Callable[..., Iterable[str]]]] = None,
     lifetime: Optional[int] = None,
     key: Optional[Callable[..., str]] = None,
     hook_userdata: Optional[Any] = None,
@@ -166,7 +166,7 @@ def cache_decorator(
                 cache_info.serialized_size = len(serialized)
                 service.set_bytes(ckey, serialized, full_tag_names, lifetime=lifetime)
         if ckey and lock_id and metadata_hash:
-            service.metadata_service.unlock(ckey, metadata_hash, lock_id)
+            service._unlock(ckey, metadata_hash, lock_id)
         if ckey:
             cache_info.elapsed = time.perf_counter() - before
             service._safe_call_hook(
