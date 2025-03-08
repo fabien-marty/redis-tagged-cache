@@ -34,7 +34,7 @@ class CacheInfo:
     """Decorated function/method keyword arguments (**kwargs)."""
 
     method_decorator: bool = False
-    """If True, this comes from a method_decorator. Else from a function_decorator."""
+    """If True, we decorated a method (and not a simple function)."""
 
     hit: bool = False
     """Cache hit (the value was found in the cache)."""
