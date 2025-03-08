@@ -76,9 +76,6 @@ if __name__ == "__main__":
     # It will output "called" and "foo2bar" (cache miss)
     print(a.slow_method("foo2", arg2="bar"))
 
-# Note: for plain functions, you can use @cache.decorator
-#       that works the same way
-
 ```
 
 ## Full API
