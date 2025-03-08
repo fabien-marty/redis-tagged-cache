@@ -1,5 +1,5 @@
 import time
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 
@@ -91,7 +91,7 @@ def test_get_or_lock_result():
         GetOrLockResult(value=b"value", lock_id="foo")
 
 
-def bad_serializer(value: Any) -> bytes | None:
+def bad_serializer(value: Any) -> Optional[bytes]:
     if value == 1:
         return None
     elif value == 2:

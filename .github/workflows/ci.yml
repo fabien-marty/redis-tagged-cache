@@ -69,10 +69,7 @@ jobs:
         with:
           name: site
           path: site/
-      - name: run unit tests
-        run: |
-          make test
-      - name: run integration tests
+      - name: run unit/integration tests
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
