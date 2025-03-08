@@ -58,7 +58,7 @@ cache = RedisTaggedCache(
 
 
 class A:
-    @cache.method_decorator(lifetime=60, tags=["tag1", "tag2"])
+    @cache.decorator(lifetime=60, tags=["tag1", "tag2"])
     def slow_method(self, arg1: str, arg2: str = "foo"):
         print("called")
         return arg1 + arg2
@@ -75,9 +75,6 @@ if __name__ == "__main__":
 
     # It will output "called" and "foo2bar" (cache miss)
     print(a.slow_method("foo2", arg2="bar"))
-
-# Note: for plain functions, you can use @cache.function_decorator
-#       that works the same way
 
 ```
 

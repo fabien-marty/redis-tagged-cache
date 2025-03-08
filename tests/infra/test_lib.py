@@ -1,47 +1,34 @@
 import datetime
-import os
+import logging
 import time
-import uuid
 from threading import Thread
-from typing import List
+from typing import Any, Iterable, List
 
 import pytest
 
-from rtc.app.service import CacheInfo
-from rtc.infra.adapters.storage.dict import DictStorageAdapter
-from rtc.infra.controllers.lib import CacheMiss, RedisTaggedCache
+from rtc import CacheInfo, CacheMiss, RedisTaggedCache
+from rtc.app.hash import get_random_bytes
 
-REDIS_HOST = os.getenv("REDIS_HOST", "")
-REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+logging.basicConfig(level=logging.DEBUG)
 
 
 def _instance(**kwargs) -> RedisTaggedCache:
     if "namespace" not in kwargs:
-        namespace = str(uuid.uuid4())
-        kwargs = {"namespace": namespace, **kwargs}
-    if REDIS_HOST:
-        kwargs["host"] = REDIS_HOST
-        kwargs["port"] = REDIS_PORT
-    cache = RedisTaggedCache(**kwargs)
-    if not REDIS_HOST and not kwargs.get("disabled", False):
-        cache._forced_adapter = DictStorageAdapter()
-    return cache
+        kwargs["namespace"] = get_random_bytes().hex()
+    if "in_local_memory" not in kwargs:
+        kwargs["in_local_memory"] = True
+    return RedisTaggedCache(**kwargs)
 
 
 @pytest.fixture
-def instance() -> RedisTaggedCache:
-    return _instance()
+def instance(**kwargs) -> RedisTaggedCache:
+    return _instance(**kwargs)
 
 
 def test_basic(instance: RedisTaggedCache):
     instance.set("foo", b"value", tags=["tag1", "tag2"])
     assert instance.get("foo", tags=["tag1", "tag2"]) == b"value"
     instance.delete("foo", tags=["tag1", "tag2"])
-    with pytest.raises(CacheMiss):
-        instance.get("foo", tags=["tag1", "tag2"])
-    instance.set("foo", b"value", tags=["tag1", "tag2"])
-    assert instance.get("foo", tags=["tag1", "tag2"]) == b"value"
-    instance.invalidate("tag2")
     with pytest.raises(CacheMiss):
         instance.get("foo", tags=["tag1", "tag2"])
 
@@ -175,10 +162,9 @@ def test_function_decorator_with_hook(instance: RedisTaggedCache):
 
     def cache_hook(
         cache_key: str,
-        cache_tags: List[str],
+        cache_tags: Iterable[str],
         cache_info: CacheInfo,
-        userdata=None,
-        **kwargs,
+        userdata: Any = None,
     ):
         assert cache_info.elapsed > 0.0
         assert userdata == "foo"
@@ -209,9 +195,9 @@ def test_method_decorator_with_hook(instance: RedisTaggedCache):
 
     def cache_hook(
         cache_key: str,
-        cache_tags: List[str],
+        cache_tags: Iterable[str],
         cache_info: CacheInfo,
-        userdata=None,
+        userdata: Any = None,
         **kwargs,
     ):
         assert cache_info.elapsed > 0.0

@@ -1,21 +1,16 @@
-import logging
-import time
-import uuid
+import threading
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 import redis
 
+from rtc.app.exc import StorageCacheException
+from rtc.app.hash import short_hash
 from rtc.app.storage import StoragePort
 
-LOCK_LUA_SCRIPT = """
-if redis.call("get",KEYS[1]) == ARGV[1]
-then
-    return redis.call("del",KEYS[1])
-else
-    return 0
-end
-"""
+
+def get_storage_key(namespace: str, key: str, metadata_hash: str) -> str:
+    return f"rtc:{short_hash(namespace)}:s:{short_hash(key)}:{metadata_hash}"
 
 
 @dataclass
@@ -24,84 +19,40 @@ class RedisStorageAdapter(StoragePort):
 
     redis_kwargs: Dict[str, Any] = field(default_factory=dict)
     _redis_client: Optional[redis.Redis] = None
-    _redis_lock_del_cmd: Any = field(init=False, repr=False)
+    _lock: threading.Lock = field(default_factory=threading.Lock)
 
     @property
     def redis_client(self) -> redis.Redis:
-        if self._redis_client is None:
-            self._redis_client = redis.Redis(**self.redis_kwargs)
-            self._redis_lock_del_cmd = self._redis_client.register_script(
-                LOCK_LUA_SCRIPT
-            )
-        return self._redis_client
-
-    @property
-    def redis_lock_del_cmd(self) -> Any:
-        if self._redis_lock_del_cmd is None:
-            _ = self.redis_client
-            assert self._redis_lock_del_cmd is not None
-        return self._redis_lock_del_cmd
+        with self._lock:
+            if self._redis_client is None:
+                self._redis_client = redis.Redis(**self.redis_kwargs)
+            return self._redis_client
 
     def set(
-        self, storage_key: str, value: bytes, lifetime: Optional[int] = None
+        self, namespace: str, key: str, metadata_hash: str, value: bytes, lifetime: int
     ) -> None:
+        storage_key = get_storage_key(namespace, key, metadata_hash)
         try:
-            self.redis_client.set(storage_key, value, ex=lifetime)
-        except Exception:
-            logging.warning("Failed to set value in Redis", exc_info=True)
+            if lifetime:
+                self.redis_client.set(storage_key, value, ex=lifetime)
+            else:
+                self.redis_client.set(storage_key, value)
+        except Exception as e:
+            raise StorageCacheException(f"Failed to set value in Redis: {e}") from e
 
-    def mdelete(self, storage_keys: List[str]) -> None:
-        try:
-            self.redis_client.delete(*storage_keys)
-        except Exception:
-            logging.warning("Failed to delete values in Redis", exc_info=True)
-
-    def get(self, storage_key: str) -> Optional[bytes]:
+    def get(self, namespace: str, key: str, metadata_hash: str) -> Optional[bytes]:
+        storage_key = get_storage_key(namespace, key, metadata_hash)
         try:
             return self.redis_client.get(storage_key)  # type: ignore
-        except Exception:
-            logging.warning("Failed to get a value in Redis", exc_info=True)
-            return None
+        except Exception as e:
+            raise StorageCacheException(f"Failed to get value from Redis: {e}") from e
 
-    def mget(self, storage_keys: List[str]) -> List[Optional[bytes]]:
+    def delete(self, namespace: str, key: str, metadata_hash: str) -> bool:
+        storage_key = get_storage_key(namespace, key, metadata_hash)
         try:
-            return self.redis_client.mget(storage_keys)  # type: ignore
-        except Exception:
-            logging.warning("Failed to mget values in Redis", exc_info=True)
-            return [None] * len(storage_keys)
-
-    def get_lock_storage_key(self, storage_key: str) -> str:
-        return f"{storage_key}:lock"
-
-    def get_lock_waiting_key(self, storage_key: str) -> str:
-        return f"{storage_key}:waiting"
-
-    def lock(
-        self, storage_key: str, timeout: int = 5, waiting: int = 1
-    ) -> Optional[str]:
-        lock_id = str(uuid.uuid4())
-        lock_storage_key = self.get_lock_storage_key(storage_key)
-        lock_waiting_key = self.get_lock_waiting_key(storage_key)
-        before = time.perf_counter()
-        while (time.perf_counter() - before) < waiting:
-            res = self.redis_client.set(lock_storage_key, lock_id, ex=timeout, nx=True)
-            if res is not None:
-                # we have the lock
-                return lock_id
-            # lock is already taken
-            # => let's wait a unlock() was called or wait up to 1s
-            self.redis_client.blpop([lock_waiting_key], timeout=1)
-        return None
-
-    def unlock(self, storage_key: str, lock_identifier: str) -> None:
-        lock_storage_key = self.get_lock_storage_key(storage_key)
-        lock_waiting_key = self.get_lock_waiting_key(storage_key)
-        pipe = self.redis_client.pipeline(transaction=True)
-        self._redis_lock_del_cmd(
-            keys=[lock_storage_key],
-            args=[lock_identifier],
-            client=pipe,
-        )
-        pipe.rpush(lock_waiting_key, "x")
-        pipe.expire(lock_waiting_key, time=3)
-        pipe.execute()
+            deleted = self.redis_client.delete(storage_key)
+            return deleted > 0  # type: ignore
+        except Exception as e:
+            raise StorageCacheException(
+                f"Failed to delete value from Redis: {e}"
+            ) from e

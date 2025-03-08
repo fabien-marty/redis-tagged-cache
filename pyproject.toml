@@ -9,12 +9,15 @@ packages = [{ include = "rtc" }]
 [tool.poetry.dependencies]
 python = "^3.7"
 redis = ">=3.2.0"
+decorator = "5.1.1"
+wrapt = "^1.16"
 
 [tool.poetry.group.test.dependencies]
 pytest = [
     { version = "^8.3", python = ">=3.9" },
     { version = "~7.4", python = "<3.9" },
 ]
+pytest-cov = { version = "^6.0", python = ">=3.9" }
 tomli = [{ version = "~2.0", python = "<3.9" }]
 packaging = [
     { version = "24.0", python = "<3.9" },
@@ -24,6 +27,9 @@ packaging = [
 [tool.poetry.group.lint.dependencies]
 ruff = { version = "^0.8", python = ">=3.9" }
 mypy = { version = "^1.13", python = ">=3.9" }
+
+[tool.poetry.group.dev.dependencies]
+pydeps = { version = "^3.0.1", python = ">=3.9" }
 
 [tool.poetry.group.doc.dependencies]
 import-linter = { version = "^2.1", python = ">=3.9" }
@@ -38,3 +44,13 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
 exclude = "^site"
+
+[[tool.mypy.overrides]]
+module = ["wrapt.*"]
+ignore_missing_imports = true
+
+[tool.coverage.run]
+omit = [
+    "rtc/infra/adapters/metadata/bad.py",
+    "rtc/infra/adapters/storage/bad.py",
+]

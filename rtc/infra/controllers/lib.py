@@ -1,98 +1,148 @@
-import logging
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, Callable, List, Optional, Union
+from typing import Any, Callable, Iterable, Optional, Union
 
-from rtc.app.service import (
-    DEFAULT_SERIALIZER,
-    DEFAULT_UNSERIALIZER,
+from rtc.app.decorator import cache_decorator
+from rtc.app.metadata import MetadataPort, MetadataService
+from rtc.app.serializer import DEFAULT_SERIALIZER, DEFAULT_UNSERIALIZER
+from rtc.app.service import Service
+from rtc.app.storage import StoragePort, StorageService
+from rtc.app.types import (
     CacheHook,
-    CacheMiss,
-    Service,
 )
-from rtc.app.storage import StoragePort
+from rtc.infra.adapters.metadata.blackhole import BlackHoleMetadataAdapter
+from rtc.infra.adapters.metadata.dict import DictMetadataAdapter
+from rtc.infra.adapters.metadata.redis import RedisMetadataAdapter
 from rtc.infra.adapters.storage.blackhole import BlackHoleStorageAdapter
+from rtc.infra.adapters.storage.dict import DictStorageAdapter
 from rtc.infra.adapters.storage.redis import RedisStorageAdapter
 
 
 @dataclass
 class RedisTaggedCache:
-    """Main class for Redis-based tagged cache.
+    """A Redis-based caching system with tag-based invalidation support.
 
+    This class provides a thread-safe caching implementation using Redis as the backend.
+    It supports tag-based cache invalidation, allowing you to invalidate multiple cache
+    entries at once by invalidating their associated tags.
 
-    Note: thread-safe.
+    Features:
+    - Thread-safe operations
+    - Tag-based cache invalidation
+    - Configurable cache entry lifetimes
+    - Local memory cache option for testing
+    - Automatic and customizable serialization support
+    - Decorator interface for easy function result caching
+    - Cache hooks for monitoring and debugging
 
+    Example:
+        ```python
+        cache = RedisTaggedCache(
+            host="localhost",
+            port=6379
+        )
+
+        # Basic usage
+        cache.set("key", "value", tags=["tag1", "tag2"])
+        assert cache.get("key") == "value"
+        cache.invalidate("tag1")  # Invalidates all entries with tag1
+
+        cache.get("key")  # it will raise a CacheMiss exception
+        ```
+
+    Note:
+        All operations are thread-safe and can be used in multi-threaded environments.
     """
 
     namespace: str = "default"
-    """Namespace for the cache entries."""
+    """Namespace prefix for all cache entries to avoid key collisions."""
 
     host: str = "localhost"
-    """Redis server hostname."""
+    """Redis server hostname or IP address."""
 
     port: int = 6379
-    """Redis server port."""
+    """Redis server port number."""
 
     db: int = 0
-    """Redis database number."""
+    """Redis database number (0-15)."""
 
     ssl: bool = False
-    """Use SSL for the connection."""
+    """Whether to use SSL/TLS for Redis connection."""
 
     socket_timeout: int = 5
-    """Socket timeout in seconds."""
+    """Socket timeout in seconds for Redis operations."""
 
     socket_connect_timeout: int = 5
-    """Socket connection timeout in seconds."""
+    """Socket connection timeout in seconds when establishing Redis connection."""
 
     default_lifetime: Optional[int] = 3600  # 1h
-    """Default lifetime for cache entries (in seconds).
+    """Default lifetime for cache entries in seconds.
 
-    Note: None means "no expiration" (be sure in that case that your redis is
-    configured to automatically evict keys even if they are not volatile).
-
+    If set to None, entries will not expire automatically. In this case, ensure your
+    Redis instance is configured with an appropriate eviction policy.
     """
 
     lifetime_for_tags: Optional[int] = 86400  # 24h
-    """Lifetime for tags entries (in seconds).
+    """Lifetime for tag entries in seconds.
 
-    If a tag used by a cache entry is invalidated, the cache entry is also invalidated.
-
-    Note: None means "no expiration" (be sure in that case that your redis is
-    configured to automatically evict keys even if they are not volatile).
-
+    When a tag expires or is invalidated, all cache entries associated with that tag
+    are also invalidated. Set to None for no automatic tag expiration.
     """
 
     disabled: bool = False
-    """If True, the cache is disabled (cache always missed and no write) but the API is still available."""
+    """If True, disables all caching operations while maintaining the API interface.
+
+    Useful for testing or temporarily disabling cache without code changes.
+    """
+
+    in_local_memory: bool = False
+    """If True, uses process-local memory instead of Redis for storage.
+
+    Warning:
+        This mode is intended for testing only and should not be used in production
+        as it doesn't provide cross-process cache consistency.
+    """
 
     cache_hook: Optional[CacheHook] = None
-    """Optional custom hook called after each cache decorator usage.
+    """Optional callback function for monitoring cache operations.
 
-    Note: the hook is called with the key, the list of tags, a CacheInfo object containing
-    interesting metrics / internal values and an optional userdata variable
-    (set with `hook_userdata` parameter of decorator methods).
-
-    The signature of the hook must be:
-
+    The hook function is called after each cache decorator operation with the following signature:
     ```python
-    def your_hook(key: str, tags: List[str], cache_info: CacheInfo, userdata: Optional[Any] = None) -> None:
-        # {your code here}
-        return
+    def cache_hook(
+        key: str,
+        tags: Iterable[str],
+        cache_info: CacheInfo,
+        userdata: Optional[Any] = None
+    ) -> None:
+        pass
     ```
 
+    Parameters:
+        - key: The cache key being accessed
+        - tags: Iterable of tags associated with the key
+        - cache_info: Object containing cache operation metrics
+        - userdata: Optional custom data passed through the decorator
     """
 
     serializer: Callable[[Any], Optional[bytes]] = DEFAULT_SERIALIZER
-    """Serializer function to serialize data before storing it in the cache."""
+    """Function to serialize Python objects before storing in cache.
+
+    Must accept any Python object and return bytes or None (means: cache bypassed).
+    """
 
     unserializer: Callable[[bytes], Any] = DEFAULT_UNSERIALIZER
-    """Unserializer function to unserialize data after reading it from the cache."""
+    """Function to deserialize data read from cache back into Python objects.
+
+    Must accept bytes and return the original Python object.
+    """
 
     _internal_lock: Lock = field(init=False, default_factory=Lock)
-    _forced_adapter: Optional[StoragePort] = field(
+    _forced_metadata_adapter: Optional[MetadataPort] = field(
         init=False, default=None
-    )  # for unit-testing only
+    )  # for advanced usage only
+    _forced_storage_adapter: Optional[StoragePort] = field(
+        init=False, default=None
+    )  # for advanced usage only
     __service: Optional[Service] = field(
         init=False, default=None
     )  # cache of the Service object
@@ -105,120 +155,158 @@ class RedisTaggedCache:
             return self.__service
 
     def _make_service(self) -> Service:
-        adapter: StoragePort
-        if self._forced_adapter:
-            adapter = self._forced_adapter
+        metadata_adapter: MetadataPort
+        storage_adapter: StoragePort
+        redis_kwargs = {
+            "host": self.host,
+            "port": self.port,
+            "db": self.db,
+            "ssl": self.ssl,
+            "socket_timeout": self.socket_timeout,
+            "socket_connect_timeout": self.socket_connect_timeout,
+        }
+        if self._forced_metadata_adapter:
+            metadata_adapter = self._forced_metadata_adapter
         elif self.disabled:
-            adapter = BlackHoleStorageAdapter()
+            metadata_adapter = BlackHoleMetadataAdapter()
+        elif self.in_local_memory:
+            metadata_adapter = DictMetadataAdapter()
         else:
-            adapter = RedisStorageAdapter(
-                redis_kwargs={
-                    "host": self.host,
-                    "port": self.port,
-                    "db": self.db,
-                    "ssl": self.ssl,
-                    "socket_timeout": self.socket_timeout,
-                    "socket_connect_timeout": self.socket_connect_timeout,
-                }
-            )
+            metadata_adapter = RedisMetadataAdapter(redis_kwargs)
+        if self._forced_storage_adapter:
+            storage_adapter = self._forced_storage_adapter
+        elif self.disabled:
+            storage_adapter = BlackHoleStorageAdapter()
+        elif self.in_local_memory:
+            storage_adapter = DictStorageAdapter()
+        else:
+            storage_adapter = RedisStorageAdapter(redis_kwargs)
         return Service(
-            storage_adapter=adapter,
             namespace=self.namespace,
-            default_lifetime=self.default_lifetime,
-            lifetime_for_tags=self.lifetime_for_tags,
+            metadata_service=MetadataService(
+                namespace=self.namespace,
+                adapter=metadata_adapter,
+                default_lifetime=self.lifetime_for_tags or 0,
+            ),
+            storage_service=StorageService(
+                namespace=self.namespace,
+                adapter=storage_adapter,
+                default_lifetime=self.default_lifetime or 0,
+            ),
             cache_hook=self.cache_hook,
         )
-
-    def _serialize(self, value: Any) -> Optional[bytes]:
-        try:
-            return self.serializer(value)
-        except Exception:
-            logging.warning(
-                "error when serializing provided data => cache bypassed",
-                exc_info=True,
-            )
-            return None
-
-    def _unserialize(self, value: bytes) -> Any:
-        try:
-            return self.unserializer(value)
-        except Exception:
-            logging.warning(
-                "error when unserializing cached data => cache bypassed",
-                exc_info=True,
-            )
-            raise
-
-    def get(
-        self,
-        key: str,
-        tags: Optional[List[str]] = None,
-    ) -> Any:
-        """Read the value for the given key (with given invalidation tags).
-
-        If the key does not exist (or invalidated), None is returned.
-
-        Raised:
-            CacheMiss: if the key does not exist (or expired/invalidated).
-
-        """
-        tmp = self._service.get_value(key, tags or [])
-        if tmp is None:
-            raise CacheMiss()
-        try:
-            return self._unserialize(tmp)
-        except Exception:
-            return CacheMiss()
 
     def set(
         self,
         key: str,
         value: Any,
-        tags: Optional[List[str]] = None,
+        tags: Optional[Iterable[str]] = None,
         lifetime: Optional[int] = None,
-    ) -> None:
-        """Set a value for the given key (with given invalidation tags).
+    ) -> bool:
+        """Store a value in the cache with optional tags and lifetime.
 
-        Lifetime (in seconds) can be set (default to None: default expiration,
-        0 means no expiration).
+        Args:
+            key: Unique identifier for the cache entry
+            value: Any Python object to store (must be serializable)
+            tags: Optional list of tags for invalidation
+            lifetime: Optional TTL in seconds (if set: overrides default_lifetime, 0 means no expiration)
 
+        Returns:
+            bool: True if the value was successfully stored, False otherwise
+
+        Example:
+            ```python
+            cache.set("user:123", user_data, tags=["user", "user:123"], lifetime=3600)
+            ```
         """
-        tmp = self._serialize(value)
-        if tmp is not None:
-            self._service.set_value(key, tmp, tags or [], lifetime)
+        return self._service.set(key, value, tags, lifetime)
 
-    def delete(self, key: str, tags: Optional[List[str]] = None) -> None:
-        """Delete the entry for the given key (with given invalidation tags).
+    def delete(self, key: str, tags: Optional[Iterable[str]] = None) -> bool:
+        """Remove an entry from the cache.
 
-        If the key does not exist (or invalidated), no exception is raised.
+        Args:
+            key: The key to delete
+            tags: Optional list of tags (for consistency, should match set() tags)
 
+        Returns:
+            bool: True if the key was found and deleted, False if it didn't exist
+
+        Note:
+            No exception is raised if the key doesn't exist or was already invalidated.
         """
-        self._service.delete_value(key, tags or [])
+        return self._service.delete(key, tags)
 
-    def invalidate(self, tags: Optional[Union[str, List[str]]] = None) -> None:
-        """Invalidate entries with given tag/tags.
+    def get(
+        self,
+        key: str,
+        tags: Optional[Iterable[str]] = None,
+    ) -> Any:
+        """Retrieve a value from the cache.
 
-        Note: if tags is None, nothing is done.
+        Args:
+            key: The key to look up
+            tags: Optional list of tags (for consistency, should match set() tags)
 
+        Returns:
+            The stored value if found and valid
+
+        Raises:
+            CacheMiss: If the key doesn't exist, has expired, or was invalidated
+
+        Example:
+            ```python
+            try:
+                value = cache.get("user:123", tags=["user", "user:123"])
+            except CacheMiss:
+                value = compute_user_data()
+            ```
         """
-        if tags is None:
-            return
+        return self._service.get(key, tags)
+
+    def invalidate(self, tags: Union[str, Iterable[str]]) -> bool:
+        """Invalidate all cache entries associated with the given tag(s).
+
+        Args:
+            tags: Single tag string or iterable of tags to invalidate
+
+        Returns:
+            bool: True if the invalidation was successful
+
+        Example:
+            ```python
+            # Invalidate all user-related cache entries
+            cache.invalidate("user")
+
+            # Invalidate multiple tags at once
+            cache.invalidate(["user:123", "session:456"])
+            ```
+        """
         if isinstance(tags, str):
-            self._service.invalidate_tags([tags])
+            return self._service.invalidate_tags([tags])
         else:
-            self._service.invalidate_tags(tags)
+            return self._service.invalidate_tags(tags)
 
-    def invalidate_all(self) -> None:
-        """Invalidate all entries.
+    def invalidate_all(self) -> bool:
+        """Invalidate all cache entries in the current namespace.
 
-        Note: this is done by invalidating a special tag that is automatically used by all cache entries. So the complexity is still O(1).
+        This operation is implemented efficiently using a special tag that is
+        automatically associated with all cache entries. The operation is O(1)
+        regardless of the number of cache entries.
 
+        Returns:
+            bool: True if the invalidation was successful
+
+        Example:
+            ```python
+            # Clear entire cache (within current namespace)
+            cache.invalidate_all()
+            ```
         """
-        self._service.invalidate_all()
+        return self._service.invalidate_all()
 
-    def function_decorator(
+    def decorator(
         self,
-        tags: Optional[Union[List[str], Callable[..., List[str]]]] = None,
+        tags: Optional[Union[Iterable[str], Callable[..., Iterable[str]]]] = None,
         lifetime: Optional[int] = None,
         key: Optional[Callable[..., str]] = None,
         hook_userdata: Optional[Any] = None,
@@ -226,110 +314,85 @@ class RedisTaggedCache:
         lock_timeout: int = 5,
         serializer: Optional[Callable[[Any], Optional[bytes]]] = None,
         unserializer: Optional[Callable[[bytes], Any]] = None,
-    ):
-        """Decorator for caching the result of a function.
+    ) -> Callable:
+        """Decorator for automatically caching function results.
 
-        Notes:
+        This decorator provides a high-level interface for caching function return values.
+        It supports both static and dynamic cache keys and tags, custom serialization,
+        and protection against cache stampede.
 
-        - for method, you should use `method_decorator` instead (because with `method_decorator` the first argument `self` is ignored in automatic key generation)
-        - the result of the function must be pickleable
-        - `tags` and `lifetime` are the same as for `set` method (but `tags` can also be a callable here to provide dynamic tags)
-        - `key` is an optional function that can be used to generate a custom key
-        - `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else)
-        - if `serializer` or `unserializer` are not provided, we will use the serializer/unserializer defined passed in the `RedisTaggedCache` constructor
-        - `lock` is an optional boolean to enable a lock mechanism to avoid cache stampede (default to False), there is some overhead but can
-        be interesting for slow functions
-        - `lock_timeout` is an optional integer to set the lock timeout in seconds (default to 5), should be greater that the time
-        needed to call the decorated function
+        If you don't provide a key, we will generate a key from the function name and arguments
+        (that must be JSON-serializable). For methods, we will use the method name and class name
+        but the instance (self) won't be taken into account by default (for generating the key).
 
-        If you don't provide a `key` argument, a key is automatically generated from the function name/location and its calling arguments (they must be JSON serializable).
-        You can override this behavior by providing a custom `key` function with following signature:
+        Args:
+            tags: Static list of tags or a function that generates tags dynamically
+            lifetime: Optional TTL in seconds (overrides default_lifetime)
+            key: Optional function to generate custom cache keys
+            hook_userdata: Optional data passed to cache hooks
+            lock: If True, uses distributed locking to prevent cache stampede
+            lock_timeout: Lock timeout in seconds (default: 5)
+            serializer: Optional custom serializer for this function
+            unserializer: Optional custom unserializer for this function
 
-        ```python
-        def custom_key(*args, **kwargs) -> str:
-            # {your code here to generate key}
-            # make your own key from *args, **kwargs that are exactly the calling arguments of the decorated function
-            return key
-        ```
+        Returns:
+            A decorator function that can be applied to methods or functions
 
-        If you are interested by settings dynamic tags (i.e. tags that are computed at runtime depending on the function calling arguments), you can provide a callable for `tags` argument
-        with the following signature:
+        Example:
+            ```python
+            # Basic usage with static tags
+            @cache.decorator(tags=["user"])
+            def get_user(user_id: int) -> dict:
+                return db.fetch_user(user_id)
 
-        ```python
-        def dynamic_tags(*args, **kwargs) -> List[str]:
-            # {your code here to generate tags}
-            # make your own tags from *args, **kwargs that are exactly the calling arguments of the decorated function
-            return tags
-        ```
+            # Dynamic tags based on function arguments
+            @cache.decorator(
+                tags=lambda user_id: [f"user:{user_id}", "user"],
+                lifetime=3600
+            )
+            def get_user_with_dynamic_tags(user_id: int) -> dict:
+                return db.fetch_user(user_id)
 
+            # Custom cache key generation
+            @cache.decorator(
+                key=lambda user_id: f"user_profile:{user_id}"
+            )
+            def get_user_profile(user_id: int) -> dict:
+                return db.fetch_user_profile(user_id)
+
+            # Protection against cache stampede
+            @cache.decorator(lock=True, lock_timeout=10)
+            def expensive_computation() -> dict:
+                return perform_slow_calculation()
+            ```
+
+        Note:
+            - The decorated function's arguments must be JSON-serializable for automatic key generation
+            - When using custom key functions, ensure keys are unique and deterministic
+            - Lock timeout should be greater than the expected function execution time
         """
-        return self._service.decorator(
-            tags,
-            lifetime=lifetime,
-            key=key,
-            hook_userdata=hook_userdata,
+        return cache_decorator(
+            service=self._service,
             serializer=serializer if serializer else self.serializer,
             unserializer=unserializer if unserializer else self.unserializer,
             lock=lock,
             lock_timeout=lock_timeout,
-        )
-
-    def method_decorator(
-        self,
-        tags: Optional[Union[List[str], Callable[..., List[str]]]] = None,
-        lifetime: Optional[int] = None,
-        key: Optional[Callable[..., str]] = None,
-        hook_userdata: Optional[Any] = None,
-        lock: bool = False,
-        lock_timeout: int = 5,
-        serializer: Optional[Callable[[Any], Optional[bytes]]] = None,
-        unserializer: Optional[Callable[[bytes], Any]] = None,
-    ):
-        """Decorator for caching the result of a method.
-
-        Notes:
-
-        - for functions, you should use `function_decorator` instead (because with `method_decorator` the first argument is ignored in automatic key generation)
-        - the result of the method must be pickleable
-        - `tags` and `lifetime` are the same as for `set` method (but `tags` can also be a callable here to provide dynamic tags)
-        - `key` is an optional method that can be used to generate a custom key
-        - `hook_userdata` is an optional variable that can be transmitted to custom cache hooks (useless else)
-        - if `serializer` or `unserializer` are not provided, we will use the serializer/unserializer defined passed in the `RedisTaggedCache` constructor
-        - `lock` is an optional boolean to enable a lock mechanism to avoid cache stampede (default to False), there is some overhead but can
-        be interesting for slow functions
-        - `lock_timeout` is an optional integer to set the lock timeout in seconds (default to 5), should be greater that the time
-        needed to call the decorated function
-
-        If you don't provide a `key` argument, a key is automatically generated from the method name/location and its calling arguments (they must be JSON serializable).
-        You can override this behavior by providing a custom `key` function with following signature:
-
-        ```python
-        def custom_key(*args, **kwargs) -> str:
-            # {your code here to generate key}
-            # make your own key from *args, **kwargs that are exactly the calling arguments of the decorated method (including self)
-            return key
-        ```
-
-        If you are interested by settings dynamic tags (i.e. tags that are computed at runtime depending on the method calling arguments), you can provide a callable for `tags` argument
-        with the following signature:
-
-        ```python
-        def dynamic_tags(*args, **kwargs) -> List[str]:
-            # {your code here to generate tags}
-            # make your own tags from *args, **kwargs that are exactly the calling arguments of the decorated method (including self)
-            return tags
-
-        ```
-
-        """
-        return self._service.decorator(
-            tags,
-            lifetime=lifetime,
             key=key,
-            ignore_first_argument=True,
             hook_userdata=hook_userdata,
-            serializer=serializer if serializer else self.serializer,
-            unserializer=unserializer if unserializer else self.unserializer,
-            lock=lock,
-            lock_timeout=lock_timeout,
+            tags=tags,
+            lifetime=lifetime,
         )
+
+    def function_decorator(self, *args, **kwargs):
+        """DEPRECATED: Use `decorator()` instead.
+
+        This method will be removed in a future version.
+        """
+        return self.decorator(*args, **kwargs)
+
+    def method_decorator(self, *args, **kwargs):
+        """DEPRECATED: Use `decorator()` instead.
+
+        This method will be removed in a future version.
+        """
+        return self.decorator(*args, **kwargs)
