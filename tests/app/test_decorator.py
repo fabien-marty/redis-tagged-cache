@@ -1,4 +1,4 @@
-from typing import Iterable, List, Any
+from typing import Any, Iterable, List
 
 import pytest
 

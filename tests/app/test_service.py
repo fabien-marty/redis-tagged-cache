@@ -1,5 +1,5 @@
 import time
-from typing import Any, Iterable
+from typing import Any
 
 import pytest
 
@@ -8,7 +8,6 @@ from rtc.app.metadata import MetadataPort, MetadataService
 from rtc.app.serializer import DEFAULT_SERIALIZER, DEFAULT_UNSERIALIZER
 from rtc.app.service import GetOrLockResult, Service
 from rtc.app.storage import StoragePort, StorageService
-from rtc.app.types import CacheInfo
 from rtc.infra.adapters.metadata.dict import DictMetadataAdapter
 from rtc.infra.adapters.storage.dict import DictStorageAdapter
 

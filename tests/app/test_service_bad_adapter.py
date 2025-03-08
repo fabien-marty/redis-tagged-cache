@@ -1,5 +1,3 @@
-import time
-
 import pytest
 
 from rtc.app.exc import CacheMiss
