@@ -314,7 +314,7 @@ class RedisTaggedCache:
         lock_timeout: int = 5,
         serializer: Optional[Callable[[Any], Optional[bytes]]] = None,
         unserializer: Optional[Callable[[bytes], Any]] = None,
-    ):
+    ) -> Callable:
         """Decorator for automatically caching function results.
 
         This decorator provides a high-level interface for caching function return values.
