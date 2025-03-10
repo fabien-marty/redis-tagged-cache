@@ -1,34 +1,51 @@
 SHELL:=/bin/bash
 FIX=1
 COVERAGE=0
-POETRY=poetry
-POETRY_RUN=$(POETRY) run
-RUFF=$(POETRY_RUN) ruff
-LINT_IMPORTS=$(POETRY_RUN) lint-imports
-MYPY=$(POETRY_RUN) mypy
-PYTEST=$(POETRY_RUN) pytest -W error
-PYTHON=$(POETRY_RUN) python
-MKDOCS=$(POETRY_RUN) mkdocs
-JINJA_TREE=$(POETRY_RUN) jinja-tree
+UV=uv
+UV_PYTHON?=cpython-3.9.21-linux-x86_64-gnu
+LIMITED_SUPPORT=0
+ifeq ($(UV_PYTHON), 3.7)
+	LIMITED_SUPPORT=1
+endif
+ifeq ($(UV_PYTHON), 3.8)
+	LIMITED_SUPPORT=1
+endif
+UV_OPTS=--python=$(UV_PYTHON) --python-preference=only-managed
+ifeq ($(LIMITED_SUPPORT), 1)
+	UV_OPTS+=--no-group=dev --no-group=doc --no-group=lint
+endif
+UV_RUN=$(UV) run $(UV_OPTS)
+RUFF=$(UV_RUN) ruff
+LINT_IMPORTS=$(UV_RUN) lint-imports
+MYPY=$(UV_RUN) mypy
+PYTEST=$(UV_RUN) pytest -W error
+PYTHON=$(UV_RUN) python
+MKDOCS=$(UV_RUN) mkdocs
+JINJA_TREE=$(UV_RUN) jinja-tree
 
 default: help
 
-.PHONY: _check_poetry
-_check_poetry: 
-	@command -v $(POETRY) >/dev/null 2>&1 || (echo "Poetry is not installed. Please install it from https://python-poetry.org/docs/#installation" && exit 1)
-
-.PHONY: check_poetry
-check_poetry: _check_poetry ## Check if poetry is installed and install the app if needed
-	@$(POETRY) config virtualenvs.in-project true
-	@$(POETRY) env info --path >/dev/null 2>&1 || $(MAKE) install
+.PHONY: _check_uv
+_check_uv: 
+	@command -v $(UV) >/dev/null 2>&1 || (echo "uv is not installed. Please install it from https://docs.astral.sh/uv/" && exit 1)
 
 .PHONY: install
-install: _check_poetry ## Install the app
-	$(POETRY) config virtualenvs.in-project true
-	$(POETRY) install
+install: _check_uv .venv/installed ## Install the app
+
+.venv/installed: uv.lock
+	$(MAKE) --silent --no-print-directory _check_uv
+	$(UV) --version
+	$(UV) sync $(UV_OPTS)
+	touch $@
+	$(UV_RUN) python --version
+
+uv.lock: pyproject.toml
+	$(MAKE) --silent --no-print-directory _check_uv
+	$(UV) lock $(UV_OPTS)
+	touch $@
 
 .PHONY: lint
-lint: check_poetry ## Lint the code (FIX=0 to disable autofix)
+lint: .venv/installed ## Lint the code (FIX=0 to disable autofix)
 ifeq ($(FIX), 0)
 	$(RUFF) format --config ./ruff.toml --check .
 	$(RUFF) check --config ./ruff.toml .
@@ -44,7 +61,7 @@ no-dirty: ## Test if there are some dirty files
 	@DIFF=`git status --short`; if test "$${DIFF}" != ""; then echo "ERROR: There are dirty files"; echo; git status; git diff; exit 1; fi
 
 .PHONY: test
-test: check_poetry ## Test the code
+test: .venv/installed ## Test the code
 ifeq ($(COVERAGE), 0)
 	$(PYTEST) tests
 else
@@ -61,7 +78,7 @@ clean: ## Clean generated files
 	rm -f docs/index.md
 
 .PHONY: doc
-doc: check_poetry ## Generate the documentation
+doc: .venv/installed ## Generate the documentation
 	$(JINJA_TREE) .
 	cp -f README.md docs/index.md
 	$(MKDOCS) build --clean --strict 

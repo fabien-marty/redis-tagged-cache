@@ -1,46 +1,55 @@
-[tool.poetry]
+[project]
 name = "redis-tagged-cache"
 version = "0.1.0"
 description = ""
-authors = ["Fabien MARTY <fabien.marty@botify.com>"]
+authors = [{ name = "Fabien MARTY", email = "fabien.marty@botify.com" }]
+requires-python = "~=3.7"
 readme = "README.md"
-packages = [{ include = "rtc" }]
-
-[tool.poetry.dependencies]
-python = "^3.7"
-redis = ">=3.2.0"
-decorator = "5.1.1"
-wrapt = "^1.16"
-
-[tool.poetry.group.test.dependencies]
-pytest = [
-    { version = "^8.3", python = ">=3.9" },
-    { version = "~7.4", python = "<3.9" },
-]
-pytest-cov = { version = "^6.0", python = ">=3.9" }
-tomli = [{ version = "~2.0", python = "<3.9" }]
-packaging = [
-    { version = "24.0", python = "<3.9" },
-    { version = ">= 24.2", python = ">=3.9" },
+dependencies = [
+    "redis>=3.2.0",
+    "decorator>=5.1.0",
+    "wrapt>=1.16.0",
 ]
 
-[tool.poetry.group.lint.dependencies]
-ruff = { version = "^0.8", python = ">=3.9" }
-mypy = { version = "^1.13", python = ">=3.9" }
+[dependency-groups]
+test = [
+    "pytest~=8.3 ; python_version >= '3.9'",
+    "pytest>=7.4,<7.5 ; python_version < '3.9'",
+    "pytest-cov~=6.0 ; python_version >= '3.9'",
+    "tomli>=2.0,<2.1 ; python_version < '3.9'",
+    "packaging==24.0 ; python_version < '3.9'",
+    "packaging>= 24.2 ; python_version >= '3.9'",
+]
+lint = [
+    "ruff>=0.8,<0.9 ; python_version >= '3.9'",
+    "mypy~=1.13 ; python_version >= '3.9'",
+]
+dev = ["pydeps>=3.0.1,<4 ; python_version >= '3.9'"]
+doc = [
+    "import-linter~=2.1 ; python_version >= '3.9'",
+    "mkdocstrings[python]>=0.27,<0.28 ; python_version >= '3.9'",
+    "mkdocs-material>=9.5.47,<10 ; python_version >= '3.9'",
+    "mkdocs-awesome-pages-plugin>=2.9.3,<3 ; python_version >= '3.9'",
+    "jinja-tree>=0.6.1 ; python_version >= '3.9'",
+]
 
-[tool.poetry.group.dev.dependencies]
-pydeps = { version = "^3.0.1", python = ">=3.9" }
+[tool.uv]
+default-groups = [
+    "test",
+    "lint",
+    "dev",
+    "doc",
+]
 
-[tool.poetry.group.doc.dependencies]
-import-linter = { version = "^2.1", python = ">=3.9" }
-mkdocstrings = { extras = ["python"], version = "^0.27", python = ">=3.9" }
-mkdocs-material = { python = ">=3.9", version = "^9.5.47" }
-mkdocs-awesome-pages-plugin = { python = ">=3.9", version = "^2.9.3" }
-jinja-tree = { python = ">=3.9", version = ">=0.6.1" }
+[tool.hatch.build.targets.sdist]
+include = ["rtc"]
+
+[tool.hatch.build.targets.wheel]
+include = ["rtc"]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.mypy]
 exclude = "^site"
@@ -54,3 +63,5 @@ omit = [
     "rtc/infra/adapters/metadata/bad.py",
     "rtc/infra/adapters/storage/bad.py",
 ]
+
+
