@@ -77,7 +77,7 @@ jobs:
           mv -f pyproject.toml.new pyproject.toml
           cat pyproject.toml |grep ^version
           uv build
-          uv publish --token "${{ $secrets.PYPI_TOKEN }}"
+          uv publish --token "${{ secrets.PYPI_TOKEN }}"
 
   test_imports:
     runs-on: ubuntu-22.04
