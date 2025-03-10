@@ -12,9 +12,6 @@ on:
     paths-ignore:
       - 'CHANGELOG.md'
 
-env:
-  POETRY_HOME: /opt/poetry
-
 jobs:
 
   main_ci:
@@ -30,31 +27,11 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v5
         with:
+          version: "latest"
           python-version: ${{ matrix.python-version }}
-      - name: Install poetry (Python 3.7 or 3.8)
-        if: matrix.python-version == '3.7' || matrix.python-version == '3.8'
-        run: |
-          python3 -m venv $POETRY_HOME
-          $POETRY_HOME/bin/pip install "poetry>=1.5.1,<1.6"
-      - name: Install poetry (Python >=3.9)
-        if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
-        run: |
-          python3 -m venv $POETRY_HOME
-          $POETRY_HOME/bin/pip install "poetry>=1.8.4,<1.9"
-      - name: Fix github path
-        run: |
-          echo "$POETRY_HOME/bin" >> "$GITHUB_PATH"
-      - name: Install requirements (Python 3.7 or 3.8)
-        if: matrix.python-version == '3.7' || matrix.python-version == '3.8'
-        run: |
-          poetry install --without lint --without doc
-      - name: Install requirements (Python >=3.9)
-        if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
-        run: |
-          poetry install
       - name: Run lint
         if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
         run: |

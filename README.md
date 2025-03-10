@@ -103,4 +103,4 @@ As we support Python 3.7+ for the runtime, the dev environment requires Python 3
 - `make lint`: for linting the code
 - `make test`: for executing test
 
-(the poetry env will be automatically created)
+(the venv will be automatically created)

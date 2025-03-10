@@ -20,9 +20,6 @@ on:
         default: "no"
         required: true
 
-env:
-  POETRY_HOME: /opt/poetry
-
 jobs:
 
   release:
@@ -65,26 +62,38 @@ jobs:
     steps:
       - name: Check out repository code
         uses: actions/checkout@v3
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: "3.9"
-      - name: Install poetry
-        run: |
-          python3 -m venv $POETRY_HOME
-          $POETRY_HOME/bin/pip install "poetry>=1.8.4,<1.9"
-      - name: Fix github path
-        run: |
-          echo "$POETRY_HOME/bin" >> "$GITHUB_PATH"
+          version: "latest"
+          python-version: 3.9
       - name: Install requirements
         run: |
-          poetry install
+          make install
       - name: Publish on Pypi
         run: |
           VERSION=`echo "${{ needs.release.outputs.tag }}" |sed 's/^v//g'`
           cat pyproject.toml |sed 's/^version = ".*"$/version = "'${VERSION}'"/g' > pyproject.toml.new
           mv -f pyproject.toml.new pyproject.toml
           cat pyproject.toml |grep ^version
-          poetry config pypi-token.pypi "${{ secrets.PYPI_TOKEN }}"
-          poetry build
-          poetry publish
+          uv build
+          uv publish --token "${{ $secrets.PYPI_TOKEN }}"
+
+  test_imports:
+    runs-on: ubuntu-22.04
+    needs: publish_pypi
+    steps:
+      - name: Install the latest version of uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+      - name: test
+        run: |
+          echo "- Waiting 60s..."
+          sleep 60
+          for P in 3.7 3.8 3.9 3.10 3.11 3.12; do
+            export UV_PYTHON=${P}
+            echo "- Testing import with python-${P}..."
+            uv run --with redis-tagged-cache --refresh-package redis-tagged-cache --no-project -- python -c "import rtc"
+          done
+
