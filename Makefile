@@ -2,7 +2,7 @@ SHELL:=/bin/bash
 FIX=1
 COVERAGE=0
 UV=uv
-UV_PYTHON?=cpython-3.9.21-linux-x86_64-gnu
+UV_PYTHON?=3.9
 LIMITED_SUPPORT=0
 ifeq ($(UV_PYTHON), 3.7)
 	LIMITED_SUPPORT=1
@@ -10,7 +10,8 @@ endif
 ifeq ($(UV_PYTHON), 3.8)
 	LIMITED_SUPPORT=1
 endif
-UV_OPTS=--python=$(UV_PYTHON) --python-preference=only-managed
+UV_PYTHON_OPTS=--python=$(UV_PYTHON) --python-preference=only-managed
+UV_OPTS=$(UV_PYTHON_OPTS)
 ifeq ($(LIMITED_SUPPORT), 1)
 	UV_OPTS+=--no-group=dev --no-group=doc --no-group=lint
 endif
@@ -41,7 +42,7 @@ install: _check_uv .venv/installed ## Install the app
 
 uv.lock: pyproject.toml
 	$(MAKE) --silent --no-print-directory _check_uv
-	$(UV) lock $(UV_OPTS)
+	$(UV) lock $(UV_PYTHON_OPTS)
 	touch $@
 
 .PHONY: lint
