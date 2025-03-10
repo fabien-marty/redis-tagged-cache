@@ -1,5 +1,18 @@
 # CHANGELOG
 
+## [v0.12.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.12.0) (2025-03-10)
+
+#### Added
+
+- Big refactoring: split metadata and storage [\#60](https://github.com/fabien-marty/redis-tagged-cache/pull/60) ([fabien-marty](https://github.com/fabien-marty))
+
+#### Changed
+
+- migrate to UV [\#61](https://github.com/fabien-marty/redis-tagged-cache/pull/61) ([fabien-marty](https://github.com/fabien-marty))
+- fix dependencies [\#62](https://github.com/fabien-marty/redis-tagged-cache/pull/62) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.11.2...v0.12.0)</sub>
+
 ## [v0.11.2](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.11.2) (2025-02-25)
 
 #### Fixed
