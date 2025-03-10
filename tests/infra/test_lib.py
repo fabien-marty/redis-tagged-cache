@@ -1,8 +1,9 @@
 import datetime
 import logging
+import pickle
 import time
 from threading import Thread
-from typing import Any, Iterable, List
+from typing import Any, Iterable, List, Optional
 
 import pytest
 
@@ -289,3 +290,38 @@ def test_method_decorator_with_high_concurrency_lock(instance: RedisTaggedCache)
     assert len(calls) == 1
     after = datetime.datetime.now()
     assert (after - before).total_seconds() < 4
+
+
+def _serializer(value: Any) -> Optional[bytes]:
+    return b"xxx" + pickle.dumps(value)
+    pass
+
+
+def _unserializer(value_bytes: bytes) -> Any:
+    return pickle.loads(value_bytes[3:])
+
+
+def test_custom_serializer(instance: RedisTaggedCache):
+    instance.serializer = _serializer
+    instance.unserializer = _unserializer
+    instance.set("foo", "value", tags=["tag1", "tag2"])
+    assert instance.get("foo", tags=["tag1", "tag2"]) == "value"
+
+
+def test_decorator_with_custom_serializer(instance: RedisTaggedCache):
+    calls = []
+
+    @instance.decorator(
+        tags=["tag1", "tag2"], serializer=_serializer, unserializer=_unserializer
+    )
+    def decorated(*args, **kwargs):
+        calls.append("called")
+        return [args, kwargs]
+
+    res = decorated(1, 2, foo="bar")
+    assert res == [(1, 2), {"foo": "bar"}]
+    assert len(calls) == 1
+
+    res = decorated(1, 2, foo="bar")
+    assert res == [(1, 2), {"foo": "bar"}]
+    assert len(calls) == 1
