@@ -1,5 +1,17 @@
 # CHANGELOG
 
+## [v0.12.1](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.12.1) (2025-03-12)
+
+#### Fixed
+
+- fix a corner case about custom serializers [\#67](https://github.com/fabien-marty/redis-tagged-cache/pull/67) ([fabien-marty](https://github.com/fabien-marty))
+
+#### Changed
+
+- add some tests [\#66](https://github.com/fabien-marty/redis-tagged-cache/pull/66) ([fabien-marty](https://github.com/fabien-marty))
+
+<sub>[Full Diff](https://github.com/fabien-marty/redis-tagged-cache/compare/v0.12.0...v0.12.1)</sub>
+
 ## [v0.12.0](https://github.com/fabien-marty/redis-tagged-cache/tree/v0.12.0) (2025-03-10)
 
 #### Added
