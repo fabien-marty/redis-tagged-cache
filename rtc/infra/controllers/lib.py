@@ -194,7 +194,13 @@ class RedisTaggedCache:
                 default_lifetime=self.default_lifetime or 0,
             ),
             cache_hook=self.cache_hook,
+            serializer=self.serializer,
+            unserializer=self.unserializer,
         )
+
+    def _rebuild_service(self):
+        with self._internal_lock:
+            self.__service = None
 
     def set(
         self,

@@ -294,7 +294,6 @@ def test_method_decorator_with_high_concurrency_lock(instance: RedisTaggedCache)
 
 def _serializer(value: Any) -> Optional[bytes]:
     return b"xxx" + pickle.dumps(value)
-    pass
 
 
 def _unserializer(value_bytes: bytes) -> Any:
@@ -304,8 +303,12 @@ def _unserializer(value_bytes: bytes) -> Any:
 def test_custom_serializer(instance: RedisTaggedCache):
     instance.serializer = _serializer
     instance.unserializer = _unserializer
+    instance._rebuild_service()
     instance.set("foo", "value", tags=["tag1", "tag2"])
     assert instance.get("foo", tags=["tag1", "tag2"]) == "value"
+    tmp = instance._service.get_bytes("foo", tag_names=["tag1", "tag2"])
+    assert tmp is not None
+    assert tmp[0] == ord("x")
 
 
 def test_decorator_with_custom_serializer(instance: RedisTaggedCache):
