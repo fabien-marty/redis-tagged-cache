@@ -1,6 +1,6 @@
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import redis
 
@@ -17,7 +17,7 @@ def get_storage_key(namespace: str, key: str, metadata_hash: str) -> str:
 class RedisStorageAdapter(StoragePort):
     """Redis adapter for the storage port."""
 
-    redis_kwargs: Dict[str, Any] = field(default_factory=dict)
+    redis_kwargs: dict[str, Any] = field(default_factory=dict)
     _redis_client: Optional[redis.Redis] = None
     _lock: threading.Lock = field(default_factory=threading.Lock)
 

@@ -1,7 +1,8 @@
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from threading import Lock, Thread
-from typing import Dict, Iterable, Optional, Tuple
+from typing import Optional
 
 import wrapt
 
@@ -64,10 +65,10 @@ class Item:
 @dataclass
 class DictMetadataAdapter(MetadataPort):
     _internal_lock: Lock = field(init=False, repr=False, default_factory=Lock)
-    _tags: Dict[Tuple[str, str], Item] = field(
+    _tags: dict[tuple[str, str], Item] = field(
         default_factory=dict
     )  # (namespace, tag_name) -> value
-    _locks: Dict[Tuple[str, str, str], LockWithId] = field(
+    _locks: dict[tuple[str, str, str], LockWithId] = field(
         default_factory=dict
     )  # (namespace, key, metadata_hash) -> LockWithId
     _expiration_thread: Optional[Thread] = None
@@ -130,7 +131,7 @@ class DictMetadataAdapter(MetadataPort):
     def expiration_thread_run(self):
         while True:
             with self._internal_lock:
-                new_locks: Dict[Tuple[str, str, str], LockWithId] = {}
+                new_locks: dict[tuple[str, str, str], LockWithId] = {}
                 for k, lock_with_id in self._locks.items():
                     if lock_with_id.is_expired:
                         lock_with_id.release()

@@ -1,8 +1,9 @@
 import itertools
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable, Optional
+from typing import Optional
 
 from rtc.app.hash import short_hash
 
@@ -29,6 +30,12 @@ class MetadataPort(ABC):
         """
         pass  # pragma: no cover
 
+    async def ainvalidate_tags(
+        self, namespace: str, tag_names: Iterable[str], lifetime: Optional[int]
+    ) -> None:
+        """(async version) Invalidates the given tags."""
+        return self.invalidate_tags(namespace, tag_names, lifetime)
+
     @abstractmethod
     def get_or_set_tag_values(
         self, namespace: str, tag_names: Iterable[str], lifetime: Optional[int]
@@ -47,6 +54,12 @@ class MetadataPort(ABC):
 
         """
         pass  # pragma: no cover
+
+    async def aget_or_set_tag_values(
+        self, namespace: str, tag_names: Iterable[str], lifetime: Optional[int]
+    ) -> Iterable[bytes]:
+        """(async version) Get the (unique/random) values of the given tags."""
+        return self.get_or_set_tag_values(namespace, tag_names, lifetime)
 
     @abstractmethod
     def lock(
@@ -69,6 +82,17 @@ class MetadataPort(ABC):
         """
         pass  # pragma: no cover
 
+    async def alock(
+        self,
+        namespace: str,
+        key: str,
+        metadata_hash: str,
+        timeout: int = 5,
+        waiting: int = 1,
+    ) -> Optional[str]:
+        """(async version) Lock the entry under the given key."""
+        return self.lock(namespace, key, metadata_hash, timeout, waiting)
+
     @abstractmethod
     def unlock(
         self, namespace: str, key: str, metadata_hash: str, lock_identifier: str
@@ -81,6 +105,12 @@ class MetadataPort(ABC):
 
         """
         pass  # pragma: no cover
+
+    async def aunlock(
+        self, namespace: str, key: str, metadata_hash: str, lock_identifier: str
+    ) -> None:
+        """(async version) Unlock the entry under the given key."""
+        return self.unlock(namespace, key, metadata_hash, lock_identifier)
 
 
 def get_logger() -> logging.Logger:
@@ -100,9 +130,21 @@ class MetadataService:
             self.namespace, tag_names, self.default_lifetime
         )
 
+    async def ainvalidate_tags(self, tag_names: Iterable[str]) -> None:
+        self.logger.debug("Invalidating tags: %s", ", ".join(tag_names))
+        return await self.adapter.ainvalidate_tags(
+            self.namespace, tag_names, self.default_lifetime
+        )
+
     def invalidate_all(self) -> None:
         self.logger.debug("Invalidating all cache")
         return self.adapter.invalidate_tags(
+            self.namespace, (SPECIAL_ALL_TAG_NAME,), self.default_lifetime
+        )
+
+    async def ainvalidate_all(self) -> None:
+        self.logger.debug("Invalidating all cache")
+        return await self.adapter.ainvalidate_tags(
             self.namespace, (SPECIAL_ALL_TAG_NAME,), self.default_lifetime
         )
 
@@ -113,8 +155,27 @@ class MetadataService:
         )
         return short_hash(b" ".join(tags_values))
 
+    async def aget_metadata_hash(self, tag_names: Iterable[str]) -> str:
+        sorted_tag_names = sorted(itertools.chain(tag_names, (SPECIAL_ALL_TAG_NAME,)))
+        tags_values = await self.adapter.aget_or_set_tag_values(
+            self.namespace, sorted_tag_names, self.default_lifetime
+        )
+        return short_hash(b" ".join(tags_values))
+
     def lock(self, key: str, metadata_hash: str, timeout: int = 5, waiting: int = 1):
         return self.adapter.lock(self.namespace, key, metadata_hash, timeout, waiting)
 
+    async def alock(
+        self, key: str, metadata_hash: str, timeout: int = 5, waiting: int = 1
+    ):
+        return await self.adapter.alock(
+            self.namespace, key, metadata_hash, timeout, waiting
+        )
+
     def unlock(self, key: str, metadata_hash: str, lock_identifier: str) -> None:
         return self.adapter.unlock(self.namespace, key, metadata_hash, lock_identifier)
+
+    async def aunlock(self, key: str, metadata_hash: str, lock_identifier: str) -> None:
+        return await self.adapter.aunlock(
+            self.namespace, key, metadata_hash, lock_identifier
+        )

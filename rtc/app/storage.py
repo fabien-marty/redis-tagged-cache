@@ -28,6 +28,24 @@ class StoragePort(ABC):
         """
         pass  # pragma: no cover
 
+    async def aset(
+        self,
+        namespace: str,
+        key: str,
+        metadata_hash: str,
+        value: bytes,
+        lifetime: int,
+    ) -> None:
+        """(async version) Set a value under the given key for the given lifetime (in seconds).
+
+        Note: <=0 means "no expiration"
+
+        Raises:
+            StorageException: if we can't store the value.
+
+        """
+        return self.set(namespace, key, metadata_hash, value, lifetime)
+
     @abstractmethod
     def get(self, namespace: str, key: str, metadata_hash: str) -> Optional[bytes]:
         """Read the value under the given key and return the value.
@@ -39,6 +57,19 @@ class StoragePort(ABC):
 
         """
         pass  # pragma: no cover
+
+    async def aget(
+        self, namespace: str, key: str, metadata_hash: str
+    ) -> Optional[bytes]:
+        """(async version) Read the value under the given key and return the value.
+
+        If the key does not exist, None is returned.
+
+        Raises:
+            StorageException: if we had an excepted error (not if the key does not exist).
+
+        """
+        return self.get(namespace, key, metadata_hash)
 
     @abstractmethod
     def delete(self, namespace: str, key: str, metadata_hash: str) -> bool:
@@ -54,6 +85,20 @@ class StoragePort(ABC):
 
         """
         pass  # pragma: no cover
+
+    async def adelete(self, namespace: str, key: str, metadata_hash: str) -> bool:
+        """(async version) Delete the entry under the given key.
+
+        Note: if the key does not exist, no exception is raised.
+
+        Returns:
+            true if we really deleted something.
+
+        Raises:
+            StorageException: if we had an excepted error (not if the key does not exist).
+
+        """
+        return self.delete(namespace, key, metadata_hash)
 
 
 def get_logger() -> logging.Logger:
@@ -92,12 +137,32 @@ class StorageService:
             self._resolve_lifetime(lifetime),
         )
 
+    async def aset(
+        self, key: str, metadata_hash: str, value: bytes, lifetime: Optional[int] = None
+    ) -> None:
+        self.logger.debug(
+            "Setting value for key: %s (metadata_hash: %s)", key, metadata_hash
+        )
+        await self.adapter.aset(
+            self.namespace, key, metadata_hash, value, self._resolve_lifetime(lifetime)
+        )
+
     def get(self, key: str, metadata_hash: str) -> Optional[bytes]:
         self.logger.debug(
             "Getting value for key: %s (metadata_hash: %s)", key, metadata_hash
         )
         return self.adapter.get(self.namespace, key, metadata_hash)
 
+    async def aget(self, key: str, metadata_hash: str) -> Optional[bytes]:
+        self.logger.debug(
+            "Getting value for key: %s (metadata_hash: %s)", key, metadata_hash
+        )
+        return await self.adapter.aget(self.namespace, key, metadata_hash)
+
     def delete(self, key: str, metadata_hash: str) -> bool:
         self.logger.debug("Deleting value for key: %s", key)
         return self.adapter.delete(self.namespace, key, metadata_hash)
+
+    async def adelete(self, key: str, metadata_hash: str) -> bool:
+        self.logger.debug("Deleting value for key: %s", key)
+        return await self.adapter.adelete(self.namespace, key, metadata_hash)

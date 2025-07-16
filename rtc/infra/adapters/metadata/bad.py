@@ -1,5 +1,6 @@
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, Optional
+from typing import Optional
 
 from rtc.app.exc import MetadataCacheException
 from rtc.infra.adapters.metadata.blackhole import BlackHoleMetadataAdapter

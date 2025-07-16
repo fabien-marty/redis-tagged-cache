@@ -1,4 +1,5 @@
-from typing import Any, Iterable, List
+from collections.abc import Iterable
+from typing import Any
 
 import pytest
 
@@ -110,7 +111,7 @@ def test_method_decorator(service: Service):
     assert service.get_bytes("called") is None
 
 
-def dynamic_tags(self, *args, **kwargs) -> List[str]:
+def dynamic_tags(self, *args, **kwargs) -> list[str]:
     assert args == (1, "2")
     return ["tag1", "tag2", "tag3"]
 

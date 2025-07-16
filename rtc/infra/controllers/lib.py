@@ -1,13 +1,15 @@
+from collections.abc import Coroutine, Iterable
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
-from rtc.app.decorator import cache_decorator
+from rtc.app.decorator import async_cache_decorator, cache_decorator
 from rtc.app.metadata import MetadataPort, MetadataService
 from rtc.app.serializer import DEFAULT_SERIALIZER, DEFAULT_UNSERIALIZER
 from rtc.app.service import Service
 from rtc.app.storage import StoragePort, StorageService
 from rtc.app.types import (
+    AsyncCacheHook,
     CacheHook,
 )
 from rtc.infra.adapters.metadata.blackhole import BlackHoleMetadataAdapter
@@ -103,7 +105,7 @@ class RedisTaggedCache:
         as it doesn't provide cross-process cache consistency.
     """
 
-    cache_hook: Optional[CacheHook] = None
+    cache_hook: Optional[Union[CacheHook, AsyncCacheHook]] = None
     """Optional callback function for monitoring cache operations.
 
     The hook function is called after each cache decorator operation with the following signature:
@@ -227,6 +229,16 @@ class RedisTaggedCache:
         """
         return self._service.set(key, value, tags, lifetime)
 
+    async def aset(
+        self,
+        key: str,
+        value: Any,
+        tags: Optional[Iterable[str]] = None,
+        lifetime: Optional[int] = None,
+    ) -> bool:
+        """(async version) Store a value in the cache with optional tags and lifetime."""
+        return await self._service.aset(key, value, tags, lifetime)
+
     def delete(self, key: str, tags: Optional[Iterable[str]] = None) -> bool:
         """Remove an entry from the cache.
 
@@ -241,6 +253,14 @@ class RedisTaggedCache:
             No exception is raised if the key doesn't exist or was already invalidated.
         """
         return self._service.delete(key, tags)
+
+    async def adelete(
+        self,
+        key: str,
+        tags: Optional[Iterable[str]] = None,
+    ) -> bool:
+        """(async version) Remove an entry from the cache."""
+        return await self._service.adelete(key, tags)
 
     def get(
         self,
@@ -269,6 +289,14 @@ class RedisTaggedCache:
         """
         return self._service.get(key, tags)
 
+    async def aget(
+        self,
+        key: str,
+        tags: Optional[Iterable[str]] = None,
+    ) -> Any:
+        """(async version) Retrieve a value from the cache."""
+        return await self._service.aget(key, tags)
+
     def invalidate(self, tags: Union[str, Iterable[str]]) -> bool:
         """Invalidate all cache entries associated with the given tag(s).
 
@@ -292,6 +320,16 @@ class RedisTaggedCache:
         else:
             return self._service.invalidate_tags(tags)
 
+    async def ainvalidate(
+        self,
+        tags: Union[str, Iterable[str]],
+    ) -> bool:
+        """(async version) Invalidate all cache entries associated with the given tag(s)."""
+        if isinstance(tags, str):
+            return await self._service.ainvalidate_tags([tags])
+        else:
+            return await self._service.ainvalidate_tags(tags)
+
     def invalidate_all(self) -> bool:
         """Invalidate all cache entries in the current namespace.
 
@@ -309,6 +347,10 @@ class RedisTaggedCache:
             ```
         """
         return self._service.invalidate_all()
+
+    async def ainvalidate_all(self) -> bool:
+        """(async version) Invalidate all cache entries in the current namespace."""
+        return await self._service.ainvalidate_all()
 
     def decorator(
         self,
@@ -378,6 +420,30 @@ class RedisTaggedCache:
             - Lock timeout should be greater than the expected function execution time
         """
         return cache_decorator(
+            service=self._service,
+            serializer=serializer if serializer else self.serializer,
+            unserializer=unserializer if unserializer else self.unserializer,
+            lock=lock,
+            lock_timeout=lock_timeout,
+            key=key,
+            hook_userdata=hook_userdata,
+            tags=tags,
+            lifetime=lifetime,
+        )
+
+    async def adecorator(
+        self,
+        tags: Optional[Union[Iterable[str], Callable[..., Iterable[str]]]] = None,
+        lifetime: Optional[int] = None,
+        key: Optional[Callable[..., str]] = None,
+        hook_userdata: Optional[Any] = None,
+        lock: bool = False,
+        lock_timeout: int = 5,
+        serializer: Optional[Callable[[Any], Optional[bytes]]] = None,
+        unserializer: Optional[Callable[[bytes], Any]] = None,
+    ) -> Coroutine:
+        """(async version) Decorator for automatically caching function results."""
+        return async_cache_decorator(
             service=self._service,
             serializer=serializer if serializer else self.serializer,
             unserializer=unserializer if unserializer else self.unserializer,

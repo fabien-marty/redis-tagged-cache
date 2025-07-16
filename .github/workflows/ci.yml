@@ -17,7 +17,7 @@ jobs:
   main_ci:
     strategy:
       matrix:
-        python-version: ['3.7', '3.8', '3.9', '3.10', '3.11', '3.12']
+        python-version: ['3.9', '3.10', '3.11', '3.12']
     runs-on: ubuntu-22.04
     services:
       redis:
@@ -33,7 +33,6 @@ jobs:
           version: "latest"
           python-version: ${{ matrix.python-version }}
       - name: Run lint
-        if: matrix.python-version != '3.7' && matrix.python-version != '3.8'
         run: |
           make FIX=0 lint
       - name: Run doc
