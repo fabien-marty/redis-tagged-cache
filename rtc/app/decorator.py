@@ -2,7 +2,8 @@ import inspect
 import json
 import logging
 import time
-from typing import Any, Callable, Dict, Iterable, Optional, Tuple, Union
+from collections.abc import Iterable
+from typing import Any, Callable, Optional, Union
 
 import wrapt
 
@@ -85,7 +86,7 @@ def cache_decorator(
     lock_timeout: int = 5,
 ):
     @wrapt.decorator
-    def wrapper(wrapped: Callable, instance: Any, args: Tuple, kwargs: Dict) -> Any:
+    def wrapper(wrapped: Callable, instance: Any, args: tuple, kwargs: dict) -> Any:
         before = time.perf_counter()
         class_name: str = ""
         if instance is not None:
@@ -194,7 +195,7 @@ async def async_cache_decorator(
 ):
     @wrapt.decorator
     async def wrapper(
-        wrapped: Callable, instance: Any, args: Tuple, kwargs: Dict
+        wrapped: Callable, instance: Any, args: tuple, kwargs: dict
     ) -> Any:
         before = time.perf_counter()
         class_name: str = ""

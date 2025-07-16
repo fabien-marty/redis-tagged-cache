@@ -1,6 +1,7 @@
+from collections.abc import Coroutine, Iterable
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, Callable, Coroutine, Iterable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from rtc.app.decorator import async_cache_decorator, cache_decorator
 from rtc.app.metadata import MetadataPort, MetadataService

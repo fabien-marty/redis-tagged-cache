@@ -2,8 +2,9 @@ import datetime
 import logging
 import pickle
 import time
+from collections.abc import Iterable
 from threading import Thread
-from typing import Any, Iterable, List, Optional
+from typing import Any, Optional
 
 import pytest
 
@@ -113,7 +114,7 @@ def test_invalidate_all(instance: RedisTaggedCache):
         instance.get("key", [])
 
 
-def dynamic_tags(self, *args, **kwargs) -> List[str]:
+def dynamic_tags(self, *args, **kwargs) -> list[str]:
     assert args == (1, "2")
     return ["tag1", "tag2", "tag3"]
 

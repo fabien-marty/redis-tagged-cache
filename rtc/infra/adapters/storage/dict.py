@@ -1,7 +1,7 @@
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 import wrapt
 
@@ -33,7 +33,7 @@ class Item:
 
 @dataclass
 class DictStorageAdapter(StoragePort):
-    _data: Dict[Tuple[str, str, str], Item] = field(
+    _data: dict[tuple[str, str, str], Item] = field(
         default_factory=dict
     )  # (namespace, key, metadata_hash) -> value
     _internal_lock: threading.Lock = field(default_factory=threading.Lock)

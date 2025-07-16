@@ -1,7 +1,8 @@
 import logging
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Optional, Tuple, Union
+from typing import Any, Callable, Optional, Union
 
 from rtc.app.exc import CacheException, CacheMiss
 from rtc.app.metadata import MetadataService
@@ -245,7 +246,7 @@ class Service:
 
     def _get_bytes(
         self, key: str, tag_names: Optional[Iterable[str]] = None
-    ) -> Tuple[Optional[bytes], Optional[str]]:
+    ) -> tuple[Optional[bytes], Optional[str]]:
         try:
             metadata_hash = self.metadata_service.get_metadata_hash(
                 _tag_names(tag_names)
@@ -259,7 +260,7 @@ class Service:
 
     async def _aget_bytes(
         self, key: str, tag_names: Optional[Iterable[str]] = None
-    ) -> Tuple[Optional[bytes], Optional[str]]:
+    ) -> tuple[Optional[bytes], Optional[str]]:
         try:
             metadata_hash = await self.metadata_service.aget_metadata_hash(
                 _tag_names(tag_names)

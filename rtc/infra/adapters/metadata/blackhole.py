@@ -1,4 +1,5 @@
-from typing import Iterable, Optional
+from collections.abc import Iterable
+from typing import Optional
 
 from rtc.app.hash import get_random_bytes
 from rtc.app.metadata import MetadataPort

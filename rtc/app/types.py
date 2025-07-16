@@ -1,13 +1,6 @@
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Tuple, runtime_checkable
-
-PROTOCOL_AVAILABLE = False
-try:
-    from typing import Protocol
-
-    PROTOCOL_AVAILABLE = True
-except Exception:
-    pass
+from typing import Any, Protocol, runtime_checkable
 
 
 @dataclass
@@ -27,10 +20,10 @@ class CacheInfo:
     function_name: str = ""
     """Function name of the decorated function/method."""
 
-    function_args: Tuple[Any, ...] = field(default_factory=tuple)
+    function_args: tuple[Any, ...] = field(default_factory=tuple)
     """Decorated function/method arguments (including self as first argument for methods) (*args)."""
 
-    function_kwargs: Dict[str, Any] = field(default_factory=dict)
+    function_kwargs: dict[str, Any] = field(default_factory=dict)
     """Decorated function/method keyword arguments (**kwargs)."""
 
     method_decorator: bool = False
@@ -60,37 +53,32 @@ class CacheInfo:
     # extra note: if lock_full_hit = False and lock_full_miss = False (when used with cache decorators and lock=True),
     # it means that the value was initially not here, so we acquired a lock but the value was cached after that (anti-dogpile effect)
 
-    def _dump(self) -> List[str]:
+    def _dump(self) -> list[str]:
         # Special method for cache decorators
         return [self.filepath, self.class_name, self.function_name]
 
 
-if PROTOCOL_AVAILABLE:
+@runtime_checkable
+class CacheHook(Protocol):
+    def __call__(
+        self,
+        cache_key: str,
+        cache_tags: Iterable[str],
+        cache_info: CacheInfo,
+        userdata: Any = None,
+    ) -> None:
+        """Signature of cache hooks."""
+        pass
 
-    @runtime_checkable
-    class CacheHook(Protocol):
-        def __call__(
-            self,
-            cache_key: str,
-            cache_tags: Iterable[str],
-            cache_info: CacheInfo,
-            userdata: Any = None,
-        ) -> None:
-            """Signature of cache hooks."""
-            pass
 
-    @runtime_checkable
-    class AsyncCacheHook(Protocol):
-        async def __call__(
-            self,
-            cache_key: str,
-            cache_tags: Iterable[str],
-            cache_info: CacheInfo,
-            userdata: Any = None,
-        ) -> None:
-            """Signature of async cache hooks."""
-            pass
-
-else:
-    CacheHook = Callable  # type: ignore
-    AsyncCacheHook = Callable  # type: ignore
+@runtime_checkable
+class AsyncCacheHook(Protocol):
+    async def __call__(
+        self,
+        cache_key: str,
+        cache_tags: Iterable[str],
+        cache_info: CacheInfo,
+        userdata: Any = None,
+    ) -> None:
+        """Signature of async cache hooks."""
+        pass

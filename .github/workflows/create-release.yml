@@ -92,7 +92,7 @@ jobs:
         run: |
           echo "- Waiting 60s..."
           sleep 60
-          for P in 3.7 3.8 3.9 3.10 3.11 3.12; do
+          for P in 3.9 3.10 3.11 3.12; do
             export UV_PYTHON=${P}
             echo "- Testing import with python-${P}..."
             uv run --with redis-tagged-cache --refresh-package redis-tagged-cache --no-project -- python -c "import rtc"

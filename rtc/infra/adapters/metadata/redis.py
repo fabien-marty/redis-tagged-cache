@@ -1,7 +1,8 @@
 import threading
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Optional
 
 import redis
 
@@ -35,7 +36,7 @@ def get_waiting_key(namespace: str, key: str, metadata_hash: str) -> str:
 class RedisMetadataAdapter(MetadataPort):
     """Redis adapter for the metadata port."""
 
-    redis_kwargs: Dict[str, Any] = field(default_factory=dict)
+    redis_kwargs: dict[str, Any] = field(default_factory=dict)
     _redis_client: Optional[redis.Redis] = None
     _redis_client_lock: threading.Lock = field(default_factory=threading.Lock)
     _redis_lock_del_cmd: Any = field(default=None, init=False, repr=False)
@@ -62,7 +63,7 @@ class RedisMetadataAdapter(MetadataPort):
     ) -> Iterable[bytes]:
         tag_keys = [get_tag_key(namespace, tag_name) for tag_name in tag_names]
         try:
-            values: List[bytes] = self.redis_client.mget(tag_keys)  # type: ignore
+            values: list[bytes] = self.redis_client.mget(tag_keys)  # type: ignore
         except Exception as e:
             raise MetadataCacheException(
                 f"Failed to get tag values from Redis: {e}"

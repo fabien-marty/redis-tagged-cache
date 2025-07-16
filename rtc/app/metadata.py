@@ -1,8 +1,9 @@
 import itertools
 import logging
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Iterable, Optional
+from typing import Optional
 
 from rtc.app.hash import short_hash
 
