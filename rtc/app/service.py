@@ -1,13 +1,13 @@
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Optional, Tuple
+from typing import Any, Callable, Iterable, Optional, Tuple, Union
 
 from rtc.app.exc import CacheException, CacheMiss
 from rtc.app.metadata import MetadataService
 from rtc.app.serializer import DEFAULT_SERIALIZER, DEFAULT_UNSERIALIZER
 from rtc.app.storage import StorageService
-from rtc.app.types import CacheHook, CacheInfo
+from rtc.app.types import AsyncCacheHook, CacheHook, CacheInfo
 
 
 @dataclass(frozen=True)
@@ -41,7 +41,7 @@ class Service:
     metadata_service: MetadataService
     storage_service: StorageService
     namespace: str = "default"
-    cache_hook: Optional[CacheHook] = None
+    cache_hook: Optional[Union[CacheHook, AsyncCacheHook]] = None
 
     serializer: Callable[[Any], Optional[bytes]] = DEFAULT_SERIALIZER
     """Serializer function to serialize data before storing it in the cache."""
@@ -65,8 +65,33 @@ class Service:
         """
         if not self.cache_hook:
             return
+        assert isinstance(self.cache_hook, CacheHook)
         try:
             self.cache_hook(
+                cache_key, tag_names, userdata=userdata, cache_info=cache_info
+            )
+        except Exception:
+            self.logger.warning(
+                f"Error while calling hook {self.cache_hook}", exc_info=True
+            )
+
+    async def _asafe_call_hook(
+        self,
+        cache_key: str,
+        tag_names: Iterable[str],
+        cache_info: CacheInfo,
+        userdata: Optional[Any] = None,
+    ) -> None:
+        """(async version) Call the given hook with the given arguments.
+
+        If an exception is raised, it is caught and logged. If the hook is None, nothing is done.
+
+        """
+        if not self.cache_hook:
+            return
+        assert isinstance(self.cache_hook, AsyncCacheHook)
+        try:
+            await self.cache_hook(
                 cache_key, tag_names, userdata=userdata, cache_info=cache_info
             )
         except Exception:
@@ -86,10 +111,34 @@ class Service:
             )
             return False
 
+    async def ainvalidate_tags(self, tag_names: Iterable[str]) -> bool:
+        """(async version) Invalidates a list of tag names."""
+        try:
+            await self.metadata_service.ainvalidate_tags(tag_names)
+            return True
+        except CacheException:
+            self.logger.warning(
+                "cache exception during a tag invalidation => operation bypassed",
+                exc_info=True,
+            )
+            return False
+
     def invalidate_all(self) -> bool:
         """Invalidate all entries."""
         try:
             self.metadata_service.invalidate_all()
+            return True
+        except CacheException:
+            self.logger.warning(
+                "cache exception during a tag invalidation => operation bypassed",
+                exc_info=True,
+            )
+            return False
+
+    async def ainvalidate_all(self) -> bool:
+        """(async version) Invalidates all entries."""
+        try:
+            await self.metadata_service.ainvalidate_all()
             return True
         except CacheException:
             self.logger.warning(
@@ -127,6 +176,26 @@ class Service:
             )
             return False
 
+    async def aset_bytes(
+        self,
+        key: str,
+        value: bytes,
+        tag_names: Optional[Iterable[str]] = None,
+        lifetime: Optional[int] = None,
+    ) -> bool:
+        """(async version) Set a value for the given key (with given invalidation tags)."""
+        try:
+            metadata_hash = await self.metadata_service.aget_metadata_hash(
+                _tag_names(tag_names)
+            )
+            await self.storage_service.aset(key, metadata_hash, value, lifetime)
+            return True
+        except CacheException:
+            self.logger.warning(
+                "cache exception when setting a key => cache bypassed", exc_info=True
+            )
+            return False
+
     def set(
         self,
         key: str,
@@ -150,6 +219,30 @@ class Service:
             return False
         return self.set_bytes(key, value_bytes, tag_names, lifetime)
 
+    async def aset(
+        self,
+        key: str,
+        value: Any,
+        tag_names: Optional[Iterable[str]] = None,
+        lifetime: Optional[int] = None,
+    ) -> bool:
+        """(async version) Set a value for the given key (with given invalidation tags)."""
+        try:
+            value_bytes = self.serializer(value)
+        except Exception:
+            self.logger.warning(
+                "error when serializing provided data => cache bypassed",
+                exc_info=True,
+            )
+            return False
+        if value_bytes is None:
+            self.logger.warning(
+                "serializer returned None => cache bypassed",
+                exc_info=True,
+            )
+            return False
+        return await self.aset_bytes(key, value_bytes, tag_names, lifetime)
+
     def _get_bytes(
         self, key: str, tag_names: Optional[Iterable[str]] = None
     ) -> Tuple[Optional[bytes], Optional[str]]:
@@ -164,14 +257,47 @@ class Service:
             )
             return None, None
 
+    async def _aget_bytes(
+        self, key: str, tag_names: Optional[Iterable[str]] = None
+    ) -> Tuple[Optional[bytes], Optional[str]]:
+        try:
+            metadata_hash = await self.metadata_service.aget_metadata_hash(
+                _tag_names(tag_names)
+            )
+            return await self.storage_service.aget(key, metadata_hash), metadata_hash
+        except CacheException:
+            self.logger.warning(
+                "cache exception when reading a key => cache bypassed", exc_info=True
+            )
+            return None, None
+
     def get_bytes(
         self, key: str, tag_names: Optional[Iterable[str]] = None
     ) -> Optional[bytes]:
         res, _ = self._get_bytes(key, tag_names)
         return res
 
+    async def aget_bytes(
+        self, key: str, tag_names: Optional[Iterable[str]] = None
+    ) -> Optional[bytes]:
+        res, _ = await self._aget_bytes(key, tag_names)
+        return res
+
     def get(self, key: str, tag_names: Optional[Iterable[str]] = None) -> Any:
         value_bytes = self.get_bytes(key, tag_names)
+        if value_bytes is None:
+            raise CacheMiss()
+        try:
+            return self.unserializer(value_bytes)
+        except Exception:
+            self.logger.warning(
+                "error when unserializing cached data => cache bypassed",
+                exc_info=True,
+            )
+            raise CacheMiss()
+
+    async def aget(self, key: str, tag_names: Optional[Iterable[str]] = None) -> Any:
+        value_bytes = await self.aget_bytes(key, tag_names)
         if value_bytes is None:
             raise CacheMiss()
         try:
@@ -189,6 +315,18 @@ class Service:
                 _tag_names(tag_names)
             )
             return self.storage_service.delete(key, metadata_hash)
+        except CacheException:
+            self.logger.warning("cache exception when deleting a key", exc_info=True)
+            return False
+
+    async def adelete(
+        self, key: str, tag_names: Optional[Iterable[str]] = None
+    ) -> bool:
+        try:
+            metadata_hash = await self.metadata_service.aget_metadata_hash(
+                _tag_names(tag_names)
+            )
+            return await self.storage_service.adelete(key, metadata_hash)
         except CacheException:
             self.logger.warning("cache exception when deleting a key", exc_info=True)
             return False
@@ -246,6 +384,59 @@ class Service:
             metadata_hash=metadata_hash,
         )
 
+    async def __aget_bytes_or_lock_id(
+        self,
+        key: str,
+        tag_names: Iterable[str],
+        lock_timeout: int = 5,
+    ) -> GetOrLockResult:
+        """Read the value for the given key (with given invalidation tags).
+
+        If this is a cache miss, a lock is acquired then we read the cache
+        another time. If we get the value, the lock is released.
+
+        If we still have a cache miss, None is returned as value but the lock_id
+        is returned (as the second element of the tuple).
+
+        """
+        # first try without lock
+        res, metadata_hash = await self._aget_bytes(key, tag_names)
+        if res is not None:
+            # cache hit
+            return GetOrLockResult(
+                value=res, metadata_hash=metadata_hash, full_hit=True
+            )
+        # cache miss => let's lock
+        before = time.perf_counter()
+        while True:
+            if metadata_hash is None:
+                # cache exception => cache bypassed
+                return GetOrLockResult(full_miss=True)
+            lock_id = await self.metadata_service.alock(
+                key, metadata_hash, timeout=lock_timeout, waiting=1
+            )
+            # retry: maybe we have the value now?
+            res, metadata_hash = await self._aget_bytes(key, tag_names)
+            if res is not None and metadata_hash is not None:
+                # cache hit
+                # let's unlock
+                await self.metadata_service.aunlock(key, metadata_hash, lock_id)
+                return GetOrLockResult(
+                    value=res,
+                    metadata_hash=metadata_hash,
+                    waiting_ms=int((time.perf_counter() - before) * 1000),
+                    lock_id=None,
+                )
+            if lock_id or int(time.perf_counter() - before) > lock_timeout:
+                break
+        # cache miss (again)
+        return GetOrLockResult(
+            waiting_ms=int((time.perf_counter() - before) * 1000),
+            full_miss=True,
+            lock_id=lock_id,
+            metadata_hash=metadata_hash,
+        )
+
     def _get_bytes_or_lock_id(
         self,
         key: str,
@@ -260,9 +451,33 @@ class Service:
             )
             return GetOrLockResult(full_miss=True)
 
+    async def _aget_bytes_or_lock_id(
+        self,
+        key: str,
+        tag_names: Iterable[str],
+        lock_timeout: int = 5,
+    ) -> GetOrLockResult:
+        try:
+            return await self.__aget_bytes_or_lock_id(key, tag_names, lock_timeout)
+        except CacheException:
+            self.logger.warning(
+                "cache exception when getting or locking a key", exc_info=True
+            )
+            return GetOrLockResult(full_miss=True)
+
     def _unlock(self, key: str, metadata_hash: str, lock_identifier: str) -> bool:
         try:
             self.metadata_service.unlock(key, metadata_hash, lock_identifier)
+            return True
+        except CacheException:
+            self.logger.warning("cache exception when unlocking a key", exc_info=True)
+            return False
+
+    async def _aunlock(
+        self, key: str, metadata_hash: str, lock_identifier: str
+    ) -> bool:
+        try:
+            await self.metadata_service.aunlock(key, metadata_hash, lock_identifier)
             return True
         except CacheException:
             self.logger.warning("cache exception when unlocking a key", exc_info=True)

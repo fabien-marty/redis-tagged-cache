@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Tuple, runtime_checkable
 
 PROTOCOL_AVAILABLE = False
 try:
@@ -67,6 +67,7 @@ class CacheInfo:
 
 if PROTOCOL_AVAILABLE:
 
+    @runtime_checkable
     class CacheHook(Protocol):
         def __call__(
             self,
@@ -78,5 +79,18 @@ if PROTOCOL_AVAILABLE:
             """Signature of cache hooks."""
             pass
 
+    @runtime_checkable
+    class AsyncCacheHook(Protocol):
+        async def __call__(
+            self,
+            cache_key: str,
+            cache_tags: Iterable[str],
+            cache_info: CacheInfo,
+            userdata: Any = None,
+        ) -> None:
+            """Signature of async cache hooks."""
+            pass
+
 else:
     CacheHook = Callable  # type: ignore
+    AsyncCacheHook = Callable  # type: ignore
